@@ -7,6 +7,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     dir: 'ems_server'
     args: ['build', '-t', 'gcr.io/myprojectems-435411/ems_server', '.']
+
   
   # Step 3: Push the Docker image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
@@ -40,5 +41,5 @@ steps:
       - '--quiet'
 
 timeout: '1200s'  # Adjust timeout as necessary
-
-logging: CLOUD_LOGGING_ONLY
+options:
+  logging: CLOUD_LOGGING_ONLY
