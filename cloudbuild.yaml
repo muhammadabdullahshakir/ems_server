@@ -30,15 +30,6 @@ steps:
       - '--allow-unauthenticated'
       - '--quiet'
       
-  # Step 5: Clean up (optional, can be omitted)
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'container'
-      - 'images'
-      - 'delete'
-      - 'gcr.io/myprojectems-435411/ems_server'
-      - '--force'
-      - '--quiet'
 
 timeout: '1200s'  # Adjust timeout as necessary
 options:
