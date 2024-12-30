@@ -1,22 +1,34 @@
 from django.db import models
 from django.utils import timezone
+import uuid
+
 
 class User(models.Model):
+    ROLES = (
+        ('admin', 'Admin'),
+        ('user', 'User')
+    )
     user_id = models.AutoField(primary_key=True)
-    up_id = models.ForeignKey('User_Project', on_delete=models.CASCADE, null=True)
-    username = models.CharField(max_length=150, unique=True)
+    firstname = models.CharField(max_length=150)
+    lastname = models.CharField(max_length=150)
     email = models.EmailField(unique=True)
     contact = models.CharField(max_length=20)
     password = models.CharField(max_length=128)
+    role = models.CharField(max_length=20, choices=ROLES, default='user')
+    image = models.TextField(blank=True , null=True)
+    adress = models.CharField(max_length=500)
+    is_online = models.BooleanField(default=False)
+    zip_code = models.CharField(max_length=10)
+    unique_key = models.UUIDField(default=uuid.uuid4, editable=False , unique=True)
+    hardware = models.ManyToManyField('Hardware', blank=True)
 
     def __str__(self):
-        return self.username
-    
+        return self.firstname
 
 class Project(models.Model):
     project_id  = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(User, on_delete=models.CASCADE)
-    # hardware_id = models.ForeignKey('Hardware',on_delete=models.CASCADE)
+    # name = models.CharField(max_length=50)
     total_power = models.DecimalField(max_digits=10, decimal_places=2)
     kw = models.DecimalField(max_digits=10, decimal_places=2)
     kva = models.DecimalField(max_digits=10, decimal_places=2)
@@ -41,17 +53,51 @@ class Project(models.Model):
 class User_Project(models.Model):
     up_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(User , on_delete=models.CASCADE)
-    project_id = models.ForeignKey(Project, on_delete=models.CASCADE)
+    hardware_id = models.ForeignKey('Hardware', on_delete=models.CASCADE)
 
     
 
 class Hardware(models.Model):
     hardware_id = models.AutoField(primary_key=True)
-    project_id = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project_id = models.ForeignKey(Project, on_delete=models.CASCADE, null=True , blank=True)
     name = models.CharField(max_length=100)
     serial_number = models.CharField(max_length=100)
     is_connected = models.BooleanField(default=False)
     connected_at = models.DateTimeField(auto_now_add=True)
+    
+# **************************************************************************************************
+    
+class Gateways(models.Model):
+    G_id = models.AutoField(primary_key=True)
+    gateway_name = models.CharField(max_length=50)
+    mac_address = models.CharField(max_length=100, unique=True)
+    status = models.BooleanField(default=False)
+    deploy_status = models.CharField(
+            max_length=20,
+            choices=[
+                ('warehouse', 'In Warehouse'),
+                ('user_aloted', 'Alloted to User'),
+                ('deployed', 'Deployed to User'),
+            ],
+            default='warehouse'
+        )
+    config = models.BooleanField(default=False)
+    user_id = models.ForeignKey(User, null=True , blank=True, on_delete=models.CASCADE)
+    project = models.ForeignKey(
+        'Project_Manager',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='gateways'  # Make sure this is set if you want to use `project_manager.gateways.all()`
+    )
+    analyzers_by_port = models.JSONField(default=dict)  # This will store your 'com1', 'com2', 'e1', 'e2' structure
+    analyzers = models.ManyToManyField('Analyzer', related_name='gateways')
+
+
+
+    
+    def __Str__(self):
+        return  self.gateway_name
     
     
 class Data(models.Model):
@@ -59,3 +105,89 @@ class Data(models.Model):
     project_id = models.ForeignKey(Project, on_delete=models.CASCADE)
     time = models.DateTimeField(auto_now_add=True)
     json_data = models.CharField(max_length=1000)
+    
+class Project_Manager(models.Model):
+    PM_id = models.AutoField(primary_key=True)
+    user_id = models.ForeignKey(User ,on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    longitude = models.DecimalField(max_digits=100 , decimal_places=10)
+    latitude = models.DecimalField(max_digits=100 , decimal_places=10)
+    address = models.CharField(max_length=300)
+    is_active = models.BooleanField(default=False)
+    
+    
+class Box(models.Model):
+    box = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    content = models.JSONField()
+    
+    def __str__(self):
+        return self.name
+    
+# gateways com1 com2 E1 E2
+class Device(models.Model):
+    device_type = models.CharField(max_length=50)
+    name = models.CharField(max_length=200)
+    id = models.AutoField(primary_key=True)
+    status = models.BooleanField(default=False)
+    type = models.CharField(max_length=50)
+    value = models.FloatField(default=0.0)
+    timestamp = models.DateTimeField(default=timezone.now)
+
+class Gateway(models.Model):
+    gateway_id = models.AutoField(primary_key=True)
+    gateway_name = models.CharField(max_length=50)
+    devices = models.ManyToManyField(Device,related_name='gateways')
+    
+    def __Str__(self):
+        return  self.gateway_name
+    
+class Com1(models.Model):
+    com1_id = models.AutoField(primary_key=True)
+    G_id = models.ForeignKey(Gateways , on_delete=models.CASCADE)
+    
+class Com2(models.Model):
+    com2_id = models.AutoField(primary_key=True)
+    G_id = models.ForeignKey(Gateways , on_delete=models.CASCADE)
+    
+class E1(models.Model):
+    E1_id = models.AutoField(primary_key=True)
+    G_id = models.ForeignKey(Gateways , on_delete=models.CASCADE)
+class E2(models.Model):
+    E2_id = models.AutoField(primary_key=True)
+    G_id = models.ForeignKey(Gateways , on_delete=models.CASCADE)
+    
+class Analyzer(models.Model):
+    analyzer_id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=50)
+    company_name = models.CharField(max_length=50)
+    type = models.CharField(max_length=50)
+    status = models.BooleanField(default=False)
+    gateway = models.ForeignKey(Gateways, on_delete=models.CASCADE)
+    MOD_id = models.CharField(max_length=100 )
+    Date = models.DateField(auto_now_add=True)
+    
+    # Port information as a choice field (com1, com2, e1, e2)
+    PORT_CHOICES = [
+        ('com_1', 'Com1'),
+        ('com_2', 'Com2'),
+        ('e1', 'E1'),
+        ('e2', 'E2'),
+    ]
+    port = models.CharField(max_length=6, choices=PORT_CHOICES)
+
+class MetaData(models.Model):
+    MD_id = models.AutoField(primary_key=True)
+    date = models.DateTimeField(auto_now_add=True)
+    mac_address = models.CharField(max_length=60)
+    gateway = models.ForeignKey(Gateways , on_delete=models.CASCADE,related_name='gateways') 
+    MOD_id = models.CharField(max_length=60)
+    analyzer = models.ForeignKey(Analyzer, on_delete=models.CASCADE, related_name='analyzer')
+    for i in range(1, 21):
+        exec(f'value{i}_name = models.CharField(max_length=100, blank=True, null=True)')
+        exec(f'value{i}_address = models.CharField(max_length=200, blank=True, null=True)')
+        exec(f'value{i}_value = models.FloatField(blank=True, null=True)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True)  # Add timestamp for filtering
+
+    

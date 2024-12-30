@@ -1,38 +1,112 @@
+import uuid
 from django.db import IntegrityError
-from django.forms import ValidationError
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from .models import User , Project ,Hardware , User_Project
-import json
 from django.utils import timezone
 from datetime import datetime
+from django.forms import ValidationError
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from .models import E1, E2, Com1, Com2, User , Project ,Hardware , User_Project , Project_Manager,Box, Device, Gateway,Gateways,Analyzer,Com1 , Com2 , E1 ,E2,MetaData
+import json
+from django.utils import timezone
+from datetime import datetime,timedelta
 import logging
+import base64
+from django.views import View
+# from django.core.files.uploadedfile import InMemoryUploadedFile
+# from django.core.files.storage import default_storage
 
 
-# for creating user
+
 @csrf_exempt
 def create_user(request):
     if request.method == 'POST':
         try:
+            # Parse request data
             data = json.loads(request.body)
-            username = data.get('username')
+            print('user Creation',data)
+            hardware_ids = data.get('hardware', [])
+            firstname = data.get('firstname')
+            lastname = data.get('lastname')
             email = data.get('email')
             password = data.get('password')
             contact = data.get('contact')
+            role = data.get('role', 'user')
+            is_online = data.get('is_online', False)
+            adress = data.get('adress')
+            zip_code = data.get('zip_code')
+            image_base64 = data.get('image')
 
-            if not username or not email or not contact or not password:
-                return JsonResponse({'error': 'All fields are required.'}, status=400)
-            user = User(username=username, email=email, contact=contact, password=password)
+        
+            if not all([firstname, lastname, email, contact, password, adress, zip_code]):
+                return JsonResponse({'error': 'All required fields must be provided.'}, status=400)
+
+            
+            if role not in dict(User.ROLES):
+                return JsonResponse({'error': 'Invalid role.'}, status=400)
+
+            
+            image_data = None
+            if image_base64:
+                try:
+                    if image_base64.startswith('data:image'):
+                        image_base64 = image_base64.split(',')[1]
+                    image_data = base64.b64decode(image_base64)
+                except (TypeError, ValueError):
+                    return JsonResponse({'error': 'Invalid image data.'}, status=400)
+
+        
+            user = User(
+                firstname=firstname,
+                lastname=lastname,
+                email=email,
+                contact=contact,
+                password=password,  
+                role=role,
+                adress=adress,
+                zip_code=zip_code,
+                image=image_data,  
+                is_online=is_online
+            )
             user.save()
 
-            return JsonResponse({'message': 'User created successfully.'}, status=201)
+        
+            if hardware_ids:
+                try:
+                    if not isinstance(hardware_ids, list):
+                        hardware_ids = [hardware_ids]
 
+                    hardware_list = Hardware.objects.filter(hardware_id__in=hardware_ids)
+                    if not hardware_list.exists():
+                        return JsonResponse({'error': 'No valid hardware found.'}, status=404)
+
+                    user.hardware.add(*hardware_list)
+                except Hardware.DoesNotExist:
+                    return JsonResponse({'error': 'Hardware not found.'}, status=404)
+
+            user.save()
+
+            
+            return JsonResponse({
+                'id': user.user_id,
+                'firstname': user.firstname,
+                'lastname': user.lastname,
+                'email': user.email,
+                'contact': user.contact,
+                'role': user.role,
+                'adress': user.adress,
+                'zip_code': user.zip_code,
+                'unique_key': user.unique_key,
+                'is_online': user.is_online,
+                'message': 'User created successfully.',
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON data.'}, status=400)
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
 
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
-
 
 
 #for login user
@@ -41,24 +115,62 @@ def login_user(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            username = data.get('username')
+            email = data.get('email')
             password = data.get('password')
             
             try:
-                user = User.objects.get(username=username)
+                user = User.objects.get(email=email)
                 
                 if user.password == password:
-                    return JsonResponse({'success': True, 'message': 'Login successful'}, status=200)
+                    user.is_online = True
+                    user.save()
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Login successful',
+                        'user_id': user.user_id,
+                        'firstname': user.firstname,
+                        'lastname': user.lastname,
+                        'role': user.role,
+                        'image': user.image,
+                        'unique_key' : str(user.unique_key),
+                        'is_online' : user.is_online
+                    }, status=200)
+                    
                 else:
                     return JsonResponse({'success': False, 'message': 'Invalid username or password'}, status=401)
             
             except User.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'Invalid username or password'}, status=401)
+                return JsonResponse({'success': False, 'message': 'User Not Found'}, status=404)
         
         except json.JSONDecodeError:
             return JsonResponse({'success': False, 'message': 'Invalid data'}, status=400)
     
     return JsonResponse({'success': False, 'message': 'Invalid method'}, status=405)
+
+
+#for logout*******
+@csrf_exempt
+def logout_user(request):
+    if request.method=='POST':
+        try:
+            data = json.loads(request.body)
+            email = data.get('email')
+            
+            try:
+                user = User.objects.get(email=email)
+                user.is_online=False
+                user.save()
+                
+                return JsonResponse({
+                    'success' : True,
+                    'message' : 'Logout successfully'
+                }, status=200)
+            except User.DoesNotExist:
+                return JsonResponse({'message' : 'User not found'})
+        except json.JSONDecodeError:
+            return JsonResponse({'message' : False, 'message' : 'invalid data'}, status=400)
+    return JsonResponse({'success':False, 'message':'invalid method'})
 
 
 
@@ -69,9 +181,9 @@ def create_project(request):
         try:
             data = json.loads(request.body)
             
-            # Check required fields
+            # Check required fields including 'name'
             required_fields = [
-                'user_id',  'total_power', 'kw', 'kva', 
+                'user_id', 'total_power', 'kw', 'kva', 
                 'power_factor', 'frequency', 'current_l1', 'current_l2', 
                 'current_l3', 'volt_l1', 'volt_l2', 'volt_l3', 
                 'power_l1', 'power_l2', 'power_l3'
@@ -82,11 +194,9 @@ def create_project(request):
                     return JsonResponse({'error': f'Missing field: {field}'}, status=400)
             
             user = User.objects.get(pk=data['user_id'])
-            # hardware = Hardware.objects.get(pk=data['hardware_id'])
             
             project = Project.objects.create(
                 user_id=user,
-                # hardware_id=hardware,
                 total_power=data['total_power'],
                 kw=data['kw'],
                 kva=data['kva'],
@@ -119,46 +229,43 @@ def create_project(request):
 
 
 
-
-#getting current power and voltage values to show in linechart
-
-@csrf_exempt
 def latest_project_data(request):
     if request.method == 'GET':
         user_id = request.GET.get('user_id')
+        from_date = request.GET.get('from_date')
+        to_date = request.GET.get('to_date')
 
         if not user_id:
             return JsonResponse({'error': 'User ID is required'}, status=400)
 
         try:
-            projects = Project.objects.filter(user_id=user_id).order_by('-last_updated')
+            # Retrieve all projects for the user, ordered by last_updated (ascending for consistency)
+            projects = Project.objects.filter(user_id=user_id).order_by('last_updated')
 
             if not projects.exists():
                 return JsonResponse({'error': 'No projects found for this user'}, status=404)
 
-            current_data = {
-                'L1': [],
-                'L2': [],
-                'L3': []
-            }
-            voltage_data = {
-                'L1': [],
-                'L2': [],
-                'L3': []
-            }
-            power_data = {
-                'L1': [],
-                'L2': [],
-                'L3': []
-            }
+            # Initialize data structures
+            current_data = {'L1': [], 'L2': [], 'L3': []}
+            voltage_data = {'L1': [], 'L2': [], 'L3': []}
+            power_data = {'L1': [], 'L2': [], 'L3': []}
 
-            today_date = datetime.today().date()
+            if from_date and to_date:
+                try:
+                    from_date = timezone.make_aware(datetime.strptime(from_date, '%Y-%m-%d'))
+                    to_date = timezone.make_aware(datetime.strptime(to_date, '%Y-%m-%d')).replace(hour=23, minute=59, second=59)
+                    projects = projects.filter(last_updated__range=(from_date, to_date))
 
+                    if not projects.exists():
+                        return JsonResponse({'message': 'No data available for the selected date range.'}, status=404)
+
+                except ValueError:
+                    return JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD format for from_date and to_date.'}, status=400)
+
+            # Process each project
             for project in projects:
                 try:
-                    # Make the project datetime timezone-aware
-                    project_datetime = timezone.make_aware(datetime.combine(today_date, project.time))
-                    time_ms = int(project_datetime.timestamp() * 1000)
+                    time_ms = int(project.last_updated.timestamp() * 1000)  # Convert to ms
 
                     current_data['L1'].append([time_ms, float(project.current_l1)])
                     current_data['L2'].append([time_ms, float(project.current_l2)])
@@ -171,30 +278,24 @@ def latest_project_data(request):
                     power_data['L1'].append([time_ms, float(project.power_l1)])
                     power_data['L2'].append([time_ms, float(project.power_l2)])
                     power_data['L3'].append([time_ms, float(project.power_l3)])
-                except Exception as e:
-                    return JsonResponse({'error': f'Error processing project data: {str(e)}'}, status=500)
 
+                except Exception as e:
+                    logging.error(f'Error processing project data: {str(e)}')
+                    return JsonResponse({'error': 'Error processing project data.'}, status=500)
+
+            # Structure response data
             response_data = {
-                'current': [
-                    {'name': label, 'data': data}
-                    for label, data in current_data.items()
-                ],
-                'voltage': [
-                    {'name': label, 'data': data}
-                    for label, data in voltage_data.items()
-                ],
-                'power': [
-                    {'name': label, 'data': data}
-                    for label, data in power_data.items()
-                ]
+                'current': [{'name': label, 'data': data} for label, data in current_data.items()],
+                'voltage': [{'name': label, 'data': data} for label, data in voltage_data.items()],
+                'power': [{'name': label, 'data': data} for label, data in power_data.items()],
             }
 
             return JsonResponse(response_data)
 
         except Exception as e:
-            return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
-        
-        
+            logging.error(f'Server error: {str(e)}')
+            return JsonResponse({'error': 'Server error occurred.'}, status=500)
+
 
 #getting whole user data
 @csrf_exempt
@@ -302,8 +403,8 @@ def add_hardware(request):
             data = json.loads(request.body)
         
             project_id = data.get('project_id')
-            hardware_name = data.get('hardware_name')
-            serial_number = data.get('serial_number', '') 
+            name = data.get('name')
+            serial_number = data.get('serial_number') 
             is_connected = data.get('is_connected', False)  
             
             try:
@@ -313,7 +414,7 @@ def add_hardware(request):
             
             hardware = Hardware.objects.create(
                 project_id=project,
-                name=hardware_name,
+                name=name,
                 serial_number=serial_number,
                 is_connected=is_connected
             )
@@ -396,7 +497,7 @@ def user_project(request):
 #getting the whole user
 @csrf_exempt
 def fetching_users(request):
-    users = User.objects.all().values('user_id' , 'username' , 'email' , 'contact')
+    users = User.objects.all().values('user_id' , 'firstname' , 'lastname' , 'email','contact', 'role', 'adress','zip_code' , 'is_online','image','password')
     
     user_list = list(users)
     return JsonResponse(user_list , safe=False)
@@ -417,23 +518,2294 @@ def delete_user(request , user_id):
 
 #for updating user
 @csrf_exempt
-def update_user(request , user_id):
+def update_user(request, user_id):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             
-            user = get_object_or_404(User , user_id=user_id)
+            # Debugging
+            print("Update data:", data)
             
-            user.username = data.get('username' ,user.username)
+            user = get_object_or_404(User, user_id=user_id)
+            
+            user.firstname = data.get('firstname', user.firstname)
+            user.lastname = data.get('lastname', user.lastname)
             user.email = data.get('email', user.email)
             user.contact = data.get('contact', user.contact)
-            user.password = data.get('password', user.password)
+            user.role = data.get('role', user.role)
+            user.adress = data.get('adress', user.adress)
+            user.zip_code = data.get('zip_code' , user.zip_code)
+            user.password = data.get('password',user.password)
+            user.image = data.get('image', user.image)
+            
+            # Debugging
+            print("User before save:", user)
             
             user.save()
             
-            return JsonResponse({'message' : 'User updated successfully'}, status=200)
+            return JsonResponse({'message': 'User updated successfully'}, status=200)
+        
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+        except ValueError as e:
+            return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
-            return JsonResponse({'error' : str(e)}, status = 500)
-    return JsonResponse({'error' : 'invalid Http method'}, status = 405)
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid HTTP method'}, status=405)
+
+
+#for fetching hardware
+@csrf_exempt  
+def fetch_Hardware(request, user_id):
+    if request.method == 'GET':
+        try:
+            projects = Project.objects.filter(user_id=user_id)
+            hardware = Hardware.objects.filter(project_id__in=projects).values(
+                "hardware_id", "name", "serial_number", "is_connected"
+            )
+            hardware_list = list(hardware)
+            return JsonResponse(hardware_list, safe=False)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
+    return JsonResponse({"error": "Invalid request method."}, status=405)
+
+
+#update hardware 
+@csrf_exempt
+def update_hardware(request , hardware_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+            hardware = get_object_or_404(Hardware , hardware_id=hardware_id)
+            
+            hardware.name = data.get('name' , hardware.name)
+            hardware.serial_number = data.get('serial_number', hardware.serial_number)
+            hardware.is_connected = data.get('is_connected', hardware.is_connected)
+            
+            hardware.save()
+            return JsonResponse({'message' : 'user updated successfully'},status=200)
+        except Exception as e:
+            return JsonResponse({'error':str(e)}, status=500)
+    else:
+        return JsonResponse({'error' : 'invalid Http method'}, status=405)
+    
+@csrf_exempt
+def delete_hardware(request , hardware_id):
+    if request.method == 'POST':
+        try:
+            hardware = get_object_or_404(Hardware , hardware_id=hardware_id)
+            hardware.delete()
+            return JsonResponse({'Message' : 'Hardware deleted successfully'}, status=200)
+        except Exception as e:
+            return JsonResponse({'error' : str(e)}, status=405)
+    else:
+        return JsonResponse({'error' : 'invalid Http method'}, status=500)
+    
+    
+#multiple user delete API
+@csrf_exempt
+def delete_selected_user(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        user_ids = data.get('user_ids', [])
+            
+        User.objects.filter(user_id__in=user_ids).delete()
+            
+        return JsonResponse({'message' : 'users deleted Successfully'}, status=200)
+    return JsonResponse({'message' : 'invalid request methood'}, status=405)
+
+#multiple hardware delete API
+@csrf_exempt
+def delete_selected_hardware(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        hardware_ids = data.get('hardware_ids',[])
+        
+        Hardware.objects.filter(hardware_id__in=hardware_ids).delete()
+        
+        return JsonResponse({'message' : 'Hardware deleted successfully'}, status=200)
+    return JsonResponse({'error' : 'invalid request method'}, status=405)
+
+
+#create Project Manager
+from django.db import transaction
+
+@csrf_exempt
+def Create_Project_Manager(request):
+    if request.method == 'POST':
+        try:
+            # Parse incoming JSON data
+            data = json.loads(request.body)
+        
+            # Extract fields from the incoming data
+            user_id = data.get('user_id')
+            name = data.get('name')
+            longitude = data.get('longitude')
+            latitude = data.get('latitude')
+            address = data.get('address')
+            gateway_ids = data.get('gateway_ids', [])  # Get the list of gateway IDs (if any)
+            
+            # Check for missing fields
+            if not all([user_id, name, longitude, latitude, address]):
+                return JsonResponse({'error': 'Missing required fields: user_id, name, longitude, latitude, address'}, status=400)
+        
+            # Check if user exists
+            try:
+                user = User.objects.get(user_id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User does not exist'}, status=404)
+            
+            # Use atomic transaction to ensure data integrity
+            with transaction.atomic():
+                # Create the Project Manager entry
+                PM = Project_Manager.objects.create(
+                    user_id=user,
+                    name=name,
+                    longitude=longitude,
+                    latitude=latitude,
+                    address=address,
+                    is_active=False  # Initially setting the project as inactive
+                )
+                
+                # If gateway_ids are provided, assign gateways to the project
+                if gateway_ids:
+                    gateways = Gateways.objects.filter(G_id__in=gateway_ids)
+                    
+                    # Check if the gateways exist and are not already assigned
+                    if gateways.count() != len(gateway_ids):
+                        return JsonResponse({'error': 'Some gateways are invalid or already assigned'}, status=400)
+                    
+                    # Assign the gateways to the project
+                    for gateway in gateways:
+                        if gateway.project is not None:
+                            return JsonResponse({'error': f'Gateway {gateway.G_id} is already assigned to another project.'}, status=400)
+                        gateway.project = PM  # Assuming the Gateway model has a ForeignKey to Project_Manager
+                        gateway.save()
+
+            # Return success response with the ID of the newly created Project Manager
+            return JsonResponse({
+                'message': 'Project created successfully',
+                'ID': PM.PM_id,
+                'User': user_id,
+                'Assigned Gateways': gateway_ids
+            }, status=201)
+        
+        except Exception as e:
+            # Log the exception for debugging
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request method. Only POST is allowed.'}, status=405)
+@csrf_exempt
+def Get_Project_Manager(request, user_id):     
+    if request.method == 'GET':
+        try:
+            # Use filter to retrieve all Project_Manager entries for the user_id
+            project_managers = Project_Manager.objects.filter(user_id=user_id)
+            
+            if not project_managers.exists():
+                return JsonResponse({'error': 'Project Manager not found'}, status=404)
+            
+            # List the project managers if multiple are returned
+            response_data = []
+            for project_manager in project_managers:
+                # Use the related_name 'gateways' to fetch connected gateways
+                connected_gateways = project_manager.gateways.all()
+                
+                # Prepare the gateway data
+                gateways_data = [
+                    {
+                        'G_id': gateway.G_id,
+                        'gateway_name': gateway.gateway_name,
+                        'mac_address': gateway.mac_address,
+                        'status': gateway.status,
+                        'deploy_status': gateway.deploy_status,
+                        'config': gateway.config,
+                        # 'j_object': gateway.j_object,
+                    }
+                    for gateway in connected_gateways
+                ]
+                
+                # Append the project manager data to the response
+                response_data.append({
+                    'PM_id': project_manager.PM_id,
+                    'user_id': project_manager.user_id.user_id,
+                    'name': project_manager.name,
+                    'longitude': str(project_manager.longitude),
+                    'latitude': str(project_manager.latitude),
+                    'address': project_manager.address,
+                    'is_active': project_manager.is_active,
+                    'connected_gateways': gateways_data  # Include connected gateways here
+                })
+            
+            return JsonResponse({
+                'message': 'Project Managers retrieved successfully',
+                'project_managers': response_data
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+#all project----------------------------------------------
+# @csrf_exempt
+# def Get_All_Projects(request):
+#     if request.method == 'GET':
+#         try:
+#             # Retrieve all projects
+#             projects = Project_Manager.objects.all()
+#             response_data = []
+
+#             # Iterate through each project to gather its details along with connected gateways
+#             for project in projects:
+#                 # Use the related_name 'gateways' to get the connected gateways
+#                 connected_gateways = project.gateways.all()
+                
+#                 # Prepare the gateway data
+#                 gateways_data = []
+#                 for gateway in connected_gateways:
+#                     # Fetch the analyzers for this gateway and group them by port
+#                     analyzers_by_port = {
+#                         'com1': [],
+#                         'com2': [],
+#                         'e1': [],
+#                         'e2': []
+#                     }
+
+#                     # Fetch the analyzers related to this gateway
+#                     analyzers = Analyzer.objects.filter(gateway=gateway)
+
+#                     # Group analyzers by their port (com1, com2, e1, e2)
+#                     for analyzer in analyzers:
+#                         if analyzer.port == 'com1':
+#                             analyzers_by_port['com1'].append({
+#                                 'analyzer_id': analyzer.analyzer_id,
+#                                 'name': analyzer.name,
+#                                 'company_name': analyzer.company_name,
+#                                 'type': analyzer.type,
+#                                 'status': analyzer.status,
+#                                 'values': {
+#                                     'value1': analyzer.value1,
+#                                     'address1': analyzer.address1,
+#                                     'value2': analyzer.value2,
+#                                     'address2': analyzer.address2,
+#                                     'value3': analyzer.value3,
+#                                     'address3': analyzer.address3,
+#                                     'value4': analyzer.value4,
+#                                     'address4': analyzer.address4,
+#                                     'value5': analyzer.value5,
+#                                     'address5': analyzer.address5,
+#                                     'value6': analyzer.value6,
+#                                     'address6': analyzer.address6,
+#                                     'value7': analyzer.value7,
+#                                     'address7': analyzer.address7,
+#                                     'value8': analyzer.value8,
+#                                     'address8': analyzer.address8,
+#                                     'value9': analyzer.value9,
+#                                     'address9': analyzer.address9,
+#                                     'value10': analyzer.value10,
+#                                     'address10': analyzer.address10,
+#                                     'value11': analyzer.value11,
+#                                     'address11': analyzer.address11,
+#                                     'value12': analyzer.value12,
+#                                     'address12': analyzer.address12,
+#                                     'value13': analyzer.value13,
+#                                     'address13': analyzer.address13,
+#                                     'value14': analyzer.value14,
+#                                     'address14': analyzer.address14,
+#                                     'value15': analyzer.value15,
+#                                     'address15': analyzer.address15,
+#                                     'value16': analyzer.value16,
+#                                     'address16': analyzer.address16,
+#                                     'value17': analyzer.value17,
+#                                     'address17': analyzer.address17,
+#                                     'value18': analyzer.value18,
+#                                     'address18': analyzer.address18,
+#                                     'value19': analyzer.value19,
+#                                     'address19': analyzer.address19,
+#                                     'value20': analyzer.value20,
+#                                     'address20': analyzer.address20
+#                                 }
+#                             })
+#                         elif analyzer.port == 'com2':
+#                             analyzers_by_port['com2'].append({
+#                                 'analyzer_id': analyzer.analyzer_id,
+#                                 'name': analyzer.name,
+#                                 'company_name': analyzer.company_name,
+#                                 'type': analyzer.type,
+#                                 'status': analyzer.status,
+#                                 'values': {
+#                                     'value1': analyzer.value1,
+#                                     'address1': analyzer.address1,
+#                                     'value2': analyzer.value2,
+#                                     'address2': analyzer.address2,
+#                                     'value3': analyzer.value3,
+#                                     'address3': analyzer.address3,
+#                                     'value4': analyzer.value4,
+#                                     'address4': analyzer.address4,
+#                                     'value5': analyzer.value5,
+#                                     'address5': analyzer.address5,
+#                                     'value6': analyzer.value6,
+#                                     'address6': analyzer.address6,
+#                                     'value7': analyzer.value7,
+#                                     'address7': analyzer.address7,
+#                                     'value8': analyzer.value8,
+#                                     'address8': analyzer.address8,
+#                                     'value9': analyzer.value9,
+#                                     'address9': analyzer.address9,
+#                                     'value10': analyzer.value10,
+#                                     'address10': analyzer.address10,
+#                                     'value11': analyzer.value11,
+#                                     'address11': analyzer.address11,
+#                                     'value12': analyzer.value12,
+#                                     'address12': analyzer.address12,
+#                                     'value13': analyzer.value13,
+#                                     'address13': analyzer.address13,
+#                                     'value14': analyzer.value14,
+#                                     'address14': analyzer.address14,
+#                                     'value15': analyzer.value15,
+#                                     'address15': analyzer.address15,
+#                                     'value16': analyzer.value16,
+#                                     'address16': analyzer.address16,
+#                                     'value17': analyzer.value17,
+#                                     'address17': analyzer.address17,
+#                                     'value18': analyzer.value18,
+#                                     'address18': analyzer.address18,
+#                                     'value19': analyzer.value19,
+#                                     'address19': analyzer.address19,
+#                                     'value20': analyzer.value20,
+#                                     'address20': analyzer.address20
+#                                 }
+#                             })
+#                         elif analyzer.port == 'e1':
+#                             analyzers_by_port['e1'].append({
+#                                 'analyzer_id': analyzer.analyzer_id,
+#                                 'name': analyzer.name,
+#                                 'company_name': analyzer.company_name,
+#                                 'type': analyzer.type,
+#                                 'status': analyzer.status,
+#                                 'values': {
+#                                     'value1': analyzer.value1,
+#                                     'address1': analyzer.address1,
+#                                     'value2': analyzer.value2,
+#                                     'address2': analyzer.address2,
+#                                     'value3': analyzer.value3,
+#                                     'address3': analyzer.address3,
+#                                     'value4': analyzer.value4,
+#                                     'address4': analyzer.address4,
+#                                     'value5': analyzer.value5,
+#                                     'address5': analyzer.address5,
+#                                     'value6': analyzer.value6,
+#                                     'address6': analyzer.address6,
+#                                     'value7': analyzer.value7,
+#                                     'address7': analyzer.address7,
+#                                     'value8': analyzer.value8,
+#                                     'address8': analyzer.address8,
+#                                     'value9': analyzer.value9,
+#                                     'address9': analyzer.address9,
+#                                     'value10': analyzer.value10,
+#                                     'address10': analyzer.address10,
+#                                     'value11': analyzer.value11,
+#                                     'address11': analyzer.address11,
+#                                     'value12': analyzer.value12,
+#                                     'address12': analyzer.address12,
+#                                     'value13': analyzer.value13,
+#                                     'address13': analyzer.address13,
+#                                     'value14': analyzer.value14,
+#                                     'address14': analyzer.address14,
+#                                     'value15': analyzer.value15,
+#                                     'address15': analyzer.address15,
+#                                     'value16': analyzer.value16,
+#                                     'address16': analyzer.address16,
+#                                     'value17': analyzer.value17,
+#                                     'address17': analyzer.address17,
+#                                     'value18': analyzer.value18,
+#                                     'address18': analyzer.address18,
+#                                     'value19': analyzer.value19,
+#                                     'address19': analyzer.address19,
+#                                     'value20': analyzer.value20,
+#                                     'address20': analyzer.address20
+#                                 }
+#                             })
+#                         elif analyzer.port == 'e2':
+#                             analyzers_by_port['e2'].append({
+#                                 'analyzer_id': analyzer.analyzer_id,
+#                                 'name': analyzer.name,
+#                                 'company_name': analyzer.company_name,
+#                                 'type': analyzer.type,
+#                                 'status': analyzer.status,
+#                                 'values': {
+#                                     'value1': analyzer.value1,
+#                                     'address1': analyzer.address1,
+#                                     'value2': analyzer.value2,
+#                                     'address2': analyzer.address2,
+#                                     'value3': analyzer.value3,
+#                                     'address3': analyzer.address3,
+#                                     'value4': analyzer.value4,
+#                                     'address4': analyzer.address4,
+#                                     'value5': analyzer.value5,
+#                                     'address5': analyzer.address5,
+#                                     'value6': analyzer.value6,
+#                                     'address6': analyzer.address6,
+#                                     'value7': analyzer.value7,
+#                                     'address7': analyzer.address7,
+#                                     'value8': analyzer.value8,
+#                                     'address8': analyzer.address8,
+#                                     'value9': analyzer.value9,
+#                                     'address9': analyzer.address9,
+#                                     'value10': analyzer.value10,
+#                                     'address10': analyzer.address10,
+#                                     'value11': analyzer.value11,
+#                                     'address11': analyzer.address11,
+#                                     'value12': analyzer.value12,
+#                                     'address12': analyzer.address12,
+#                                     'value13': analyzer.value13,
+#                                     'address13': analyzer.address13,
+#                                     'value14': analyzer.value14,
+#                                     'address14': analyzer.address14,
+#                                     'value15': analyzer.value15,
+#                                     'address15': analyzer.address15,
+#                                     'value16': analyzer.value16,
+#                                     'address16': analyzer.address16,
+#                                     'value17': analyzer.value17,
+#                                     'address17': analyzer.address17,
+#                                     'value18': analyzer.value18,
+#                                     'address18': analyzer.address18,
+#                                     'value19': analyzer.value19,
+#                                     'address19': analyzer.address19,
+#                                     'value20': analyzer.value20,
+#                                     'address20': analyzer.address20
+#                                 }
+#                             })
+                    
+#                     # Append the gateway and its analyzers by port
+#                     gateways_data.append({
+#                         'G_id': gateway.G_id,
+#                         'gateway_name': gateway.gateway_name,
+#                         'mac_address': gateway.mac_address,
+#                         'status': gateway.status,
+#                         'deploy_status': gateway.deploy_status,
+#                         'config': gateway.config,
+#                         'analyzers_by_port': analyzers_by_port
+#                     })
+
+#                 # Append project data
+#                 response_data.append({
+#                     'PM_id': project.PM_id,
+#                     'name': project.name,
+#                     'longitude': project.longitude,
+#                     'latitude': project.latitude,
+#                     'address': project.address,
+#                     'is_active': project.is_active,
+#                     'user': {
+#                         'user_id': project.user_id.user_id,
+#                         'firstname': project.user_id.firstname,
+#                         'lastname': project.user_id.lastname
+#                     },
+#                     'connected_gateways': gateways_data
+#                 })
+
+#             return JsonResponse({
+#                 'message': 'All projects retrieved successfully',
+#                 'projects': response_data
+#             })
+#         except Exception as e:
+#             return JsonResponse({'message': 'Error retrieving projects', 'error': str(e)})
+
+
+@csrf_exempt
+def Get_All_Projects(request):
+    if request.method == 'GET':
+        try:
+            # Retrieve all Project_Manager entries
+            project_managers = Project_Manager.objects.all()
+            
+            if not project_managers.exists():
+                return JsonResponse({'error': 'No projects found'}, status=404)
+            
+            # Prepare the response data
+            response_data = []
+            for project_manager in project_managers:
+                # Fetch connected gateways using the related_name 'gateways'
+                connected_gateways = project_manager.gateways.all()
+                
+                # Prepare the gateway data
+                gateways_data = [
+                    {
+                        'G_id': gateway.G_id,
+                        'gateway_name': gateway.gateway_name,
+                        'mac_address': gateway.mac_address,
+                        'status': gateway.status,
+                        'deploy_status': gateway.deploy_status,
+                        'config': gateway.config,
+                        # 'j_object': gateway.j_object,
+                    }
+                    for gateway in connected_gateways
+                ]
+                
+                # Append the project manager data to the response
+                response_data.append({
+                    'PM_id': project_manager.PM_id,
+                    'user_id': project_manager.user_id.user_id if project_manager.user_id else None,
+                    'user_firstname': project_manager.user_id.firstname if project_manager.user_id else None,
+                    'user_lastname': project_manager.user_id.lastname if project_manager.user_id else None,
+                    'name': project_manager.name,
+                    'longitude': str(project_manager.longitude),
+                    'latitude': str(project_manager.latitude),
+                    'address': project_manager.address,
+                    'is_active': project_manager.is_active,
+                    'connected_gateways': gateways_data  # Include connected gateways here
+                })
+            
+            return JsonResponse({
+                'message': 'All projects retrieved successfully',
+                'projects': response_data
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+# create gateway by project manager
+@csrf_exempt
+def create_Gateways(request):
+    if request.method == 'POST':
+        try:
+            # Parse incoming data
+            data = json.loads(request.body)
+            print('data:',data)
+            
+            # Extract the required fields from the incoming request
+            gateway_name = data.get('gateway_name')
+            mac_address = data.get('mac_address')
+            status = data.get('status', False)  # Default status is False if not provided
+            deploy_status = data.get('deploy_status', 'warehouse')  # Default deploy_status is 'warehouse'
+            config = data.get('config', False)  # Default config is False if not provided
+            # j_object = data.get('j_object', {})  # Default empty JSON if not provided
+            analyzers_by_port = {
+                'com1': [],
+                'com2': [],
+                'e1': [],
+                'e2': []
+            }
+
+
+            # Create a new Gateway instance with user_id as None initially
+            gateway = Gateways.objects.create(
+                gateway_name=gateway_name,
+                mac_address=mac_address,
+                status=status,
+                deploy_status=deploy_status,
+                config=config,
+                analyzers_by_port=analyzers_by_port,  # Store the fixed ports with empty lists
+
+                # j_object=j_object,
+                user_id=None  # user_id is not assigned at creation
+            )
+            
+
+            # Return success response with Gateway ID
+            return JsonResponse({
+                'message': 'Gateway created successfully',
+                "Gateway Id": gateway.G_id,
+                "analyzers_by_port": analyzers_by_port  # Include the initialized analyzers_by_port in the response
+
+            }, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+# update gateway ///////////////////////
+
+
+# count total gateways****************************
+@csrf_exempt
+def get_total_gateways(request):
+    if request.method=="GET":
+        try:
+            total_gateways_count = Gateways.objects.count()
+            
+            return JsonResponse({
+                "message" : "Gateways retrives Successfully",
+                "gateways_count" : total_gateways_count
+            },status=200)
+        except Exception as e:
+            return JsonResponse({
+                "error" : str(e)
+            },status=400)
+
+# count deployed gateways******************
+@csrf_exempt
+def get_deployed_gateways(request):
+    if request.method=="GET":
+        try:
+            deployed_gateways_count = Gateways.objects.filter(deploy_status = 'deployed').count()
+            
+            return JsonResponse({
+                "message" : "Deployed Gateways retrives Successfully",
+                "deployed_gateways_count" : deployed_gateways_count
+            },status=200)
+        except Exception as e:
+            return JsonResponse({
+                "error" : str(e)
+            },status=400)
             
             
+# count user aloted gateways
+@csrf_exempt
+def get_user_aloted_gateways(request):
+    if request.method == 'GET':
+        try:
+            user_aloted = Gateways.objects.filter(deploy_status = 'user_aloted').count()
+            
+            return JsonResponse({
+                'message' :'User aloted Gateways',
+                'user_aloted_count' : user_aloted 
+            }, status=200)
+        except Exception as e:
+            return JsonResponse({
+                "error" : str(e)
+            }, status=400)
+
+
+# fetch those gateway available in warehouse
+@csrf_exempt
+def get_unassigned_gateways(request):
+    if request.method == "GET":
+        try:
+            # Fetch only unassigned gateways where user_id is null
+            unassigned_gateways = Gateways.objects.filter(user_id__isnull=True)
+
+            # Debugging: Check if any unassigned gateways are fetched
+            print(f"Unassigned Gateways found: {unassigned_gateways.count()}")
+
+            if not unassigned_gateways.exists():
+                return JsonResponse({'message': 'No unassigned gateways found'}, status=404)
+
+            # Construct the response data
+            unassigned_gateways_data = [
+                {
+                    'G_id': gateway.G_id,
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address,
+                    'status': gateway.status,
+                    'deploy_status': gateway.deploy_status,
+                    'config': gateway.config,
+                }
+                for gateway in unassigned_gateways
+            ]
+
+            return JsonResponse({'UnassignedGateways': unassigned_gateways_data}, status=200)
+        
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")  # Debugging: Print the error
+            return JsonResponse({'error': str(e)}, status=400)
+
+    print(f"Invalid request method: {request.method}")  # Debugging: Check the request method
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+# APi to assign gateway to a user
+@csrf_exempt
+def assign_gateways_to_user(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            gateway_ids = data.get('gateway_ids')
+            print('data:', data)
+
+            if not user_id or not gateway_ids:
+                return JsonResponse({'message': 'User ID and Gateway IDs are required'}, status=400)
+
+            user = User.objects.filter(user_id=user_id).first()
+            if not user:
+                return JsonResponse({'message': 'User not found'}, status=404)
+
+            # Fetch the gateways that are not assigned to any user and have IDs in the gateway_ids list
+            gateways = Gateways.objects.filter(G_id__in=gateway_ids, user_id__isnull=True)
+
+            if gateways.count() != len(gateway_ids):
+                return JsonResponse({'message': 'Some gateways are already assigned to users'}, status=400)
+
+            # Update the deploy_status and assign them to the user
+            gateways.update(user_id=user_id, deploy_status='user_aloted')
+
+            return JsonResponse({'message': 'Gateways assigned successfully'}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+@csrf_exempt
+def fetch_gateways_of_user(request):
+    if request.method == "GET":
+        try:
+            # Get user_id from query parameters
+            user_id = request.GET.get('user_id')
+
+            # Validate that user_id is provided
+            if not user_id:
+                return JsonResponse({'message': 'User ID is required'}, status=400)
+
+            # Check if the user exists
+            user = User.objects.filter(user_id=user_id).first()
+            if not user:
+                return JsonResponse({'message': 'User not found'}, status=404)
+
+            # Fetch all gateways assigned to the user
+            gateways = Gateways.objects.filter(user_id=user_id)
+
+            # Construct the response data
+            gateways_data = []
+            for gateway in gateways:
+                # Add analyzers_by_port if analyzers exist
+                analyzers_by_port = {
+                    'com1': list(Analyzer.objects.filter(gateway=gateway, port='com1').values()) if 'Analyzer' in locals() else [],
+                    'com2': list(Analyzer.objects.filter(gateway=gateway, port='com2').values()) if 'Analyzer' in locals() else [],
+                    'e1': list(Analyzer.objects.filter(gateway=gateway, port='e1').values()) if 'Analyzer' in locals() else [],
+                    'e2': list(Analyzer.objects.filter(gateway=gateway, port='e2').values()) if 'Analyzer' in locals() else [],
+                }
+
+                # Add the gateway data
+                gateway_data = {
+                    'G_id': gateway.G_id,
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address,
+                    'status': gateway.status,
+                    'deploy_status': gateway.deploy_status,
+                    'config': gateway.config,
+                    'analyzers_by_port': analyzers_by_port
+                }
+                gateways_data.append(gateway_data)
+
+            # Return the gateways data
+            return JsonResponse({'Gateways': gateways_data}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")  # Debugging
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+@csrf_exempt
+def update_gateway(request):
+    if request.method == "PUT":
+        try:
+            data = json.loads(request.body)
+            gateway_id = data.get('G_id')
+            project_id = data.get('project_id')  # Ensure project_id is passed
+            deploy_status = data.get('deploy_status')
+
+            if not gateway_id or not project_id:
+                return JsonResponse({'message': 'Gateway ID and Project ID are required'}, status=400)
+
+            # Fetch gateway
+            gateway = Gateways.objects.filter(G_id=gateway_id).first()
+            if not gateway:
+                return JsonResponse({'message': 'Gateway not found'}, status=404)
+
+            # Update fields
+            gateway.project_id = project_id
+            gateway.deploy_status = deploy_status
+            gateway.save()
+
+            return JsonResponse({'message': 'Gateway updated successfully'}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+@csrf_exempt
+def fetch_deployed_gateways_of_user(request):
+    if request.method == "GET":
+        try:
+            # Get project_id from query parameters
+            project_id = request.GET.get('project_id')
+            if not project_id:
+                return JsonResponse({'message': 'Project ID is required'}, status=400)
+
+            # Debug: Log the incoming project_id
+            print(f"Fetching deployed gateways for Project ID: {project_id}")
+
+            # Fetch gateways
+            deployed_gateways = Gateways.objects.filter(deploy_status='deployed', project_id=project_id)
+
+            if not deployed_gateways.exists():
+                print(f"No gateways found for Project ID: {project_id}")
+                return JsonResponse({'message': 'No deployed gateways found for the project'}, status=404)
+
+            # Prepare response data
+            gateways_data = [
+                {
+                    'G_id': gateway.G_id,
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address,
+                    'status': gateway.status,
+                    'deploy_status': gateway.deploy_status,
+                    'config': gateway.config,
+                    'project_id': gateway.project_id,
+                }
+                for gateway in deployed_gateways
+            ]
+
+            # Debug: Confirm the number of gateways found
+            print(f"Found {len(gateways_data)} gateways for Project ID: {project_id}")
+
+            return JsonResponse({'deployed_gateways': gateways_data}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+# fetch user gateways in dropdown admin
+@csrf_exempt
+def fetch_gateways_of_usersList(request):
+    if request.method == "GET":
+        try:
+            user_id = request.GET.get('user_id')  # Get user_id from the query parameters
+            print('user_id:', user_id)
+
+            if not user_id:
+                return JsonResponse({'message': 'User ID is required'}, status=400)
+
+            user = User.objects.filter(user_id=user_id).first()
+            if not user:
+                return JsonResponse({'message': 'User not found'}, status=404)
+
+            # Fetch the gateways that are assigned to this user
+            gateways = Gateways.objects.filter(user_id=user_id)
+
+            # Prepare the data to return
+            gateways_data = []
+            for gateway in gateways:
+                # Fetch analyzers grouped by their ports
+                analyzers_by_port = {
+                    'com1': list(Analyzer.objects.filter(gateway=gateway, port='com1').values()),
+                    'com2': list(Analyzer.objects.filter(gateway=gateway, port='com2').values()),
+                    'e1': list(Analyzer.objects.filter(gateway=gateway, port='e1').values()),
+                    'e2': list(Analyzer.objects.filter(gateway=gateway, port='e2').values())
+                }
+
+                # Construct the gateway data with analyzers_by_port
+                gateway_data = {
+                    'G_id': gateway.G_id,
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address,
+                    'status': gateway.status,
+                    'deploy_status': gateway.deploy_status,
+                    'config': gateway.config,
+                    'analyzers_by_port': analyzers_by_port
+                }
+                gateways_data.append(gateway_data)
+
+            # Print gateways_data for debugging
+            print('Gateways data being sent:', gateways_data)
+
+            return JsonResponse({'Gateways': gateways_data}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+# getting total gateways
+@csrf_exempt
+def get_all_gateways(request):
+    if request.method == "GET":
+        try:
+            # Fetch all gateways in the database
+            gateways = Gateways.objects.all()
+
+            # Debugging: Check if any gateways are fetched
+            print(f"Gateways found: {gateways.count()}")
+
+            if not gateways.exists():
+                return JsonResponse({'message': 'No gateways found'}, status=404)
+
+            # Construct the response data
+            gateways_data = [
+                {
+                    'G_id': gateway.G_id,
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address,
+                    'status': gateway.status,
+                    'deploy_status': gateway.deploy_status,  # Should reflect 'user_aloted' if assigned
+                    'config': gateway.config,
+                }
+                for gateway in gateways
+            ]
+            
+            return JsonResponse({'Gateways': gateways_data}, status=200)
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")  # Debugging: Print the error
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    print(f"Invalid request method: {request.method}")  # Debugging: Check the request method
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+def analyzer_data(analyzer):
+    return {
+        "analyzer_id": analyzer.analyzer_id,
+        "name": analyzer.name,
+        "company_name": analyzer.company_name,
+        "type": analyzer.type,
+        "status": analyzer.status,
+        "gateway_id": analyzer.gateway.G_id,  # Gateway ID from ForeignKey
+        "MOD_id": analyzer.MOD_id,
+        "Date": analyzer.Date.strftime("%Y-%m-%d"),  # Format the date
+        "port": analyzer.port,
+    }
+
+@csrf_exempt
+def create_analyzer(request):
+    if request.method == 'POST':
+        try:
+            # Parse request body
+            data = json.loads(request.body)
+            print('data',data)
+
+            # Extract and validate required fields
+            name = data.get('name')
+            company_name = data.get('company_name')
+            type = data.get('type')
+            status = data.get('status', False)
+            port = data.get('port')  # 'com1', 'com2', 'e1', 'e2'
+            gateway_id = data.get('G_id')  # ID of the gateway
+            MOD_id = data.get('MOD_id')  # MOD_id (must be unique)
+
+            # Ensure required fields are present
+            if not all([name, port, gateway_id, MOD_id]):
+                return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+            # Validate port choice
+            if port not in dict(Analyzer.PORT_CHOICES):
+                return JsonResponse({'error': f'Invalid port: {port}'}, status=400)
+
+            # Retrieve the Gateway instance
+            try:
+                gateway_instance = Gateways.objects.get(G_id=gateway_id)
+            except Gateways.DoesNotExist:
+                return JsonResponse({'error': 'Invalid Gateway ID'}, status=404)
+
+            # Check if an analyzer with the same name, gateway, and port exists
+            analyzer = Analyzer.objects.filter(name=name, gateway=gateway_instance, port=port).first()
+
+            if analyzer:
+                # Update the existing analyzer
+                analyzer.company_name = company_name
+                analyzer.type = type
+                analyzer.status = status
+                analyzer.MOD_id = MOD_id
+
+                # Save the updated analyzer
+                analyzer.save()
+
+                return JsonResponse({
+                    'message': 'Analyzer updated successfully',
+                    'analyzer': analyzer_data(analyzer)
+                }, status=200)
+            else:
+                # Create a new analyzer
+                analyzer = Analyzer.objects.create(
+                    name=name,
+                    company_name=company_name,
+                    type=type,
+                    status=status,
+                    gateway=gateway_instance,
+                    port=port,
+                    MOD_id=MOD_id,
+                )
+
+                return JsonResponse({
+                    'message': 'Analyzer created successfully',
+                    'analyzer': analyzer_data(analyzer)
+                }, status=201)
+
+        except ValidationError as ve:
+            return JsonResponse({'error': str(ve)}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+def analyzer_data(analyzer):
+    # Return the relevant data you need for the analyzer
+    return {
+        'analyzer_id': analyzer.analyzer_id,
+        'name': analyzer.name,
+        'company_name': analyzer.company_name,
+        'type': analyzer.type,
+        'status': analyzer.status,
+        # 'values': {f"value{i}": getattr(analyzer, f"value{i}") for i in range(1, 21)},
+        # 'addresses': {f"address{i}": getattr(analyzer, f"address{i}") for i in range(1, 21)},
+        'port': analyzer.port,
+        'gateway_id': analyzer.gateway.G_id,
+    }
+    
+@csrf_exempt
+def get_analyzers_by_gateway(request, gateway_id):
+    try:
+        # Retrieve the Gateway instance using the provided G_id
+        gateway_instance = Gateways.objects.get(G_id=gateway_id)
+        
+        # Get all analyzers connected to the specified gateway
+        analyzers = Analyzer.objects.filter(gateway=gateway_instance)
+        
+        # Organize the analyzers by port (com1, com2, e1, e2)
+        analyzers_by_port = {
+            'com1': [],
+            'com2': [],
+            'e1': [],
+            'e2': [],
+        }
+        
+        for analyzer in analyzers:
+            # Prepare analyzer data to include necessary fields
+            analyzer_data = {
+                'analyzer_id': analyzer.analyzer_id,
+                'name': analyzer.name,
+                'company_name': analyzer.company_name,
+                'type': analyzer.type,
+                'status': analyzer.status,
+                'MOD_id': analyzer.MOD_id,
+                'Date': analyzer.Date.strftime('%Y-%m-%d'),  # Format date
+                'port': analyzer.port,  # Port the analyzer is connected to
+            }
+            # Append the analyzer data to the respective port category
+            if analyzer.port in analyzers_by_port:
+                analyzers_by_port[analyzer.port].append(analyzer_data)
+        
+        # Return the gateway and organized analyzers data
+        return JsonResponse({
+            'gateway_name': gateway_instance.gateway_name,
+            'gateway_id': gateway_instance.G_id,
+            'analyzers_by_port': analyzers_by_port,
+        }, status=200)
+
+    except Gateways.DoesNotExist:
+        return JsonResponse({'error': 'Gateway not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@csrf_exempt
+def create_ports(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            print(f"Received data: {data}")
+            
+            port_type = data.get('port_type')
+            G_id = data.get('G_id')
+            
+            if not port_type or not G_id:
+                return JsonResponse({'message': 'Port type and Gateway id required'}, status=400)
+            
+            try:
+                gateway = Gateways.objects.get(G_id=G_id)
+                print(f"Gateway found: {gateway}")
+            except Gateways.DoesNotExist:
+                return JsonResponse({'message': 'Gateway not found'}, status=404)
+            
+            if port_type.lower() == 'com1':
+                port = Com1.objects.create(G_id=gateway)
+            elif port_type.lower() == 'com2':
+                port = Com2.objects.create(G_id=gateway)
+            elif port_type.lower() == 'e1':
+                port = E1.objects.create(G_id=gateway)
+            elif port_type.lower() == 'e2':
+                port = E2.objects.create(G_id=gateway)
+            else:
+                return JsonResponse({'message': 'Invalid port type'}, status=400)
+
+            print(f"{port_type} created with ID: {port.pk}")
+            return JsonResponse({'message': f'{port_type} created successfully', 'ID': port.pk}, status=201)
+
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=500)
+
+    print(f"Invalid request method: {request.method}")
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+@csrf_exempt
+def fetch_ports(request):
+    if request.method == 'GET':
+        try:
+            port_type = request.GET.get('port_type')
+            G_id = request.GET.get('G_id')
+
+            if not port_type or not G_id:
+                return JsonResponse({'message': 'Port type and Gateway id required'}, status=400)
+            
+            try:
+                gateway = Gateways.objects.get(G_id=G_id)
+                print(f"Gateway found: {gateway}")
+            except Gateways.DoesNotExist:
+                return JsonResponse({'message': 'Gateway not found'}, status=404)
+
+            # Fetch based on port type
+            if port_type.lower() == 'com1':
+                ports = Com1.objects.filter(G_id=gateway)
+            elif port_type.lower() == 'com2':
+                ports = Com2.objects.filter(G_id=gateway)
+            elif port_type.lower() == 'e1':
+                ports = E1.objects.filter(G_id=gateway)
+            elif port_type.lower() == 'e2':
+                ports = E2.objects.filter(G_id=gateway)
+            else:
+                return JsonResponse({'message': 'Invalid port type'}, status=400)
+
+            # Prepare response data
+            port_list = [{'id': port.pk, 'G_id': port.G_id.G_id} for port in ports]
+            
+            return JsonResponse({'message': f'{port_type} fetched successfully', 'data': port_list}, status=200)
+
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=500)
+
+    print(f"Invalid request method: {request.method}")
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+
+# fetch analyzer on he basis of specefic port
+def fetch_analyzers_by_port(request, port_id):
+    try:
+        # Try to find the port in each model (com1, com2, e1, e2) by port_id
+        port = None
+        port_type = None
+
+        try:
+            port = Com1.objects.get(com1_id=port_id)
+            port_type = 'com1'
+        except Com1.DoesNotExist:
+            pass
+
+        if not port:
+            try:
+                port = Com2.objects.get(com2_id=port_id)
+                port_type = 'com2'
+            except Com2.DoesNotExist:
+                pass
+
+        if not port:
+            try:
+                port = E1.objects.get(E1_id=port_id)
+                port_type = 'e1'
+            except E1.DoesNotExist:
+                pass
+
+        if not port:
+            try:
+                port = E2.objects.get(E2_id=port_id)
+                port_type = 'e2'
+            except E2.DoesNotExist:
+                pass
+
+        # If no port is found, return an error
+        if not port:
+            return JsonResponse({'message': 'Port not found'}, status=404)
+
+        # Fetch analyzers based on the detected port type
+        if port_type == 'com1':
+            analyzers = list(
+                Analyzer.objects.filter(com1=port).values(
+                    'analyzer_id', 'name', 'company_name', 'type', 'status',
+                    'value1', 'address1', 'value2', 'address2', 'value3', 'address3',
+                    'value4', 'address4', 'value5', 'address5', 'value6', 'address6',
+                    'value7', 'address7', 'value8', 'address8', 'value9', 'address9',
+                    'value10', 'address10', 'value11', 'address11', 'value12', 'address12',
+                    'value13', 'address13', 'value14', 'address14', 'value15', 'address15',
+                    'value16', 'address16', 'value17', 'address17', 'value18', 'address18',
+                    'value19', 'address19', 'value20', 'address20'
+                )
+            )
+        elif port_type == 'com2':
+            analyzers = list(
+                Analyzer.objects.filter(com2=port).values(
+                    'analyzer_id', 'name', 'company_name', 'type', 'status',
+                    'value1', 'address1', 'value2', 'address2', 'value3', 'address3',
+                    'value4', 'address4', 'value5', 'address5', 'value6', 'address6',
+                    'value7', 'address7', 'value8', 'address8', 'value9', 'address9',
+                    'value10', 'address10', 'value11', 'address11', 'value12', 'address12',
+                    'value13', 'address13', 'value14', 'address14', 'value15', 'address15',
+                    'value16', 'address16', 'value17', 'address17', 'value18', 'address18',
+                    'value19', 'address19', 'value20', 'address20'
+                )
+            )
+        elif port_type == 'e1':
+            analyzers = list(
+                Analyzer.objects.filter(e1=port).values(
+                    'analyzer_id', 'name', 'company_name', 'type', 'status',
+                    'value1', 'address1', 'value2', 'address2', 'value3', 'address3',
+                    'value4', 'address4', 'value5', 'address5', 'value6', 'address6',
+                    'value7', 'address7', 'value8', 'address8', 'value9', 'address9',
+                    'value10', 'address10', 'value11', 'address11', 'value12', 'address12',
+                    'value13', 'address13', 'value14', 'address14', 'value15', 'address15',
+                    'value16', 'address16', 'value17', 'address17', 'value18', 'address18',
+                    'value19', 'address19', 'value20', 'address20'
+                )
+            )
+        elif port_type == 'e2':
+            analyzers = list(
+                Analyzer.objects.filter(e2=port).values(
+                    'analyzer_id', 'name', 'company_name', 'type', 'status',
+                    'value1', 'address1', 'value2', 'address2', 'value3', 'address3',
+                    'value4', 'address4', 'value5', 'address5', 'value6', 'address6',
+                    'value7', 'address7', 'value8', 'address8', 'value9', 'address9',
+                    'value10', 'address10', 'value11', 'address11', 'value12', 'address12',
+                    'value13', 'address13', 'value14', 'address14', 'value15', 'address15',
+                    'value16', 'address16', 'value17', 'address17', 'value18', 'address18',
+                    'value19', 'address19', 'value20', 'address20'
+                )
+            )
+        else:
+            return JsonResponse({'message': 'Invalid port type'}, status=400)
+
+        # Return the JSON response with the port and its connected analyzers
+        response_data = {
+            'port_id': port_id,
+            'port_type': port_type,
+            'analyzers': analyzers
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+                
+
+
+
+#for specefic user
+@csrf_exempt
+def Fetch_Projects(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            user_id = data.get('user_id')  
+
+            if not user_id:
+                return JsonResponse({'error': 'User ID is required'}, status=400)
+
+            try:
+                user = User.objects.get(user_id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User does not exist'}, status=404)
+
+            projects = Project_Manager.objects.filter(user_id=user)
+
+            projects_data = [
+                {
+                    'project_id': project.PM_id,  
+                    'name': project.name,
+                    'user': {
+                        'firstname': user.firstname,
+                        'lastname': user.lastname
+                    }
+                }
+                for project in projects
+            ]
+
+
+            return JsonResponse(projects_data, safe=False, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=403)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+#fetch total projects
+@csrf_exempt
+def fetch_all_projects(request):
+    if request.method == 'GET':
+        try:
+            projects = Project_Manager.objects.all()
+            
+            project_data = [
+                {
+                    'Pm_id' : project.PM_id,
+                    'name' : project.name,
+                    'user' : {
+                        'user_id': project.user_id.user_id,
+                        'firstname': project.user_id.firstname,
+                        'lastname' : project.user_id.lastname
+                    },
+                    'is-active' : project.is_active
+                }
+                for project in projects
+            ]
+            return JsonResponse(project_data , safe=False , status=200)
+        except Exception as e:
+            return JsonResponse({'error' : str(e)}, status=500)
+    return JsonResponse({'error' : 'invalid request method'})
+        
+
+
+#for admin total hardware count
+@csrf_exempt
+def total_hardware_count(request):
+    try:
+        total_hardware = Hardware.objects.count()
+        return JsonResponse({'Total_count' : total_hardware}, status=200)
+    except Exception as e :
+        return JsonResponse({'Error' : str(e)}, status=400)
+    
+@csrf_exempt
+def total_connected_hardware(request):
+    
+        total_hardware = Hardware.objects.count()
+        connected_hardware = Hardware.objects.filter(is_connected=True).count()
+        return JsonResponse({
+            'total Hardware' : total_hardware,
+            'connected_Hardware' : connected_hardware
+        })
+        
+@csrf_exempt
+def total_project(request):
+    try:
+        total_project = Project_Manager.objects.count()
+        return JsonResponse({'total_project' : total_project}, status=200)
+    except Exception as e:
+        return JsonResponse({'error' : str(e)}, status=400)
+    
+@csrf_exempt
+def active_project(request):
+    total_project = Project_Manager.objects.count()
+    active_project = Project_Manager.objects.filter(is_active=True).count()
+    return JsonResponse({
+        'total_project' : total_project,
+        'active_project' : active_project
+        
+    })
+    
+@csrf_exempt
+def fetches_total_hardware(request):
+    if request.method == 'GET':
+        try:
+            hardware_list = Hardware.objects.all().values(
+                'hardware_id',
+                'project_id',
+                'name',
+                'serial_number',
+                'is_connected',
+                'connected_at'
+            )
+            return JsonResponse(list(hardware_list), safe=False, status=200)
+        except Exception as e:
+            return JsonResponse({'error' : str(e)}, status=400)
+    return JsonResponse({'error' : 'invalid request method'}, status=405)
+
+
+#fetch assigned Hardware
+@csrf_exempt
+def fetch_assigned_hardware(request):
+    try:
+        assigned_hardware = Hardware.objects.filter(user__isnull=False).values('hardware_id' , 'name' , 'user__firstname' , 'user__lastname')
+        
+        assigned_hardware_list = list(assigned_hardware)
+        return JsonResponse(assigned_hardware_list, safe=False, status=200)
+    except Exception as e :
+        return JsonResponse({'error' : str(e)}, status=401)
+    
+# -----Box model viewss---------
+
+@csrf_exempt
+def create_box(request):
+    if request.method == "POST":
+        try:
+            # Parse JSON data
+            data = json.loads(request.body)
+            box_data = data.get("box")  # Access "box" key
+            if not box_data:
+                return JsonResponse({"message": "'box' key is required in the JSON data."}, status=400)
+
+            name = box_data.get("name")
+            content = box_data.get("content")
+
+            # Validate name and content
+            if not name or not isinstance(content, list):
+                return JsonResponse({"message": "Name and content (as a list) are required."}, status=400)
+
+            # Create a new Box entry
+            box = Box.objects.create(name=name, content=content)
+
+            return JsonResponse({"message": "New box created.", "box": {"name": box.name, "content": box.content}}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({"message": "Invalid JSON format."}, status=400)
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"message": "Method not allowed"}, status=405)
+
+
+
+
+@csrf_exempt
+def get_boxes(request):
+    try:
+        
+        latest_box = Box.objects.latest('box')  
+
+        return JsonResponse({
+            'box': {
+                'name': latest_box.name,
+                'content': latest_box.content
+            }
+        }, status=200)
+
+    except Box.DoesNotExist:
+    
+        return JsonResponse({'message': 'No boxes found'}, status=404)
+    except Exception as e:
+    
+        return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+    
+    
+
+@csrf_exempt
+def create_gateway(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            gateway_name = data.get('gateway')
+            ports = data.get('ports', [])
+        
+            # Use `get_or_create` to ensure uniqueness based on `gateway_name`
+            gateway, created = Gateway.objects.get_or_create(gateway_name=gateway_name)
+        
+            current_timestamp = timezone.now()
+
+            for port_devices in ports:
+                for device_data in port_devices:
+                    # Check if a device with the same name exists in this gateway
+                    existing_device = gateway.devices.filter(name=device_data.get('name')).first()
+                    
+                    if existing_device:
+                        # If the device exists, update its attributes
+                        existing_device.device_type = device_data.get('device_type')
+                        existing_device.type = device_data.get('type')
+                        existing_device.status = device_data.get('status')
+                        existing_device.value = device_data.get('value')
+                        existing_device.timestamp = current_timestamp
+                        existing_device.save()
+                    else:
+                        # Create a new device and associate it with the gateway
+                        device = Device.objects.create(
+                            device_type=device_data.get('device_type'),
+                            name=device_data.get('name'),
+                            type=device_data.get('type'),
+                            status=device_data.get('status'),
+                            value=device_data.get('value'),
+                            timestamp=current_timestamp
+                        )
+                        gateway.devices.add(device)
+            
+            return JsonResponse({'message': 'Gateway updated successfully'}, status=200)
+        
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+@csrf_exempt
+def fetch_gateway(request, gateway_name):
+    try:
+    
+        gateway = Gateway.objects.get(gateway_name=gateway_name)
+
+        latest_timestamp = gateway.devices.order_by('-timestamp').values('timestamp').first()
+        
+        if not latest_timestamp:
+            return JsonResponse({"error": "No data found for this gateway"}, status=404)
+        
+    
+        latest_devices = gateway.devices.filter(timestamp=latest_timestamp['timestamp'])
+
+    
+        grouped_devices = {
+            "com1": [],
+            "com2": [],
+            "E1": [],
+            "E2": []
+        }
+
+
+        for device in latest_devices:
+            device_info = {
+                "device_type": device.device_type,
+                "name": device.name,
+                "type": device.type,
+                "status": device.status,
+                "value": device.value
+            }
+            if device.device_type in grouped_devices:
+                grouped_devices[device.device_type].append(device_info)
+
+        # Structure the response in the requested format
+        response_data = {
+            "gateway": gateway.gateway_name,
+            "ports": [
+                grouped_devices["com1"],
+                grouped_devices["com2"],
+                grouped_devices["E1"],
+                grouped_devices["E2"]
+            ]
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    except Gateway.DoesNotExist:
+        return JsonResponse({"error": "Gateway not found"}, status=404)
+    
+    
+@csrf_exempt
+def fetch_all_gateways(request):
+    try:
+        # Retrieve all gateways from the database
+        all_gateways = Gateway.objects.all()
+
+        if not all_gateways.exists():
+            return JsonResponse({"error": "No gateways found"}, status=404)
+
+        # List to store all gateway data
+        response_data = []
+
+        for gateway in all_gateways:
+            # Find the latest timestamp for devices associated with the current gateway
+            latest_timestamp = gateway.devices.order_by('-timestamp').values('timestamp').first()
+            
+            if not latest_timestamp:
+                # If no devices are found, add an empty entry for the gateway
+                gateway_info = {
+                    "gateway": gateway.gateway_name,
+                    "ports": {
+                        "com1": [],
+                        "com2": [],
+                        "E1": [],
+                        "E2": []
+                    }
+                }
+            else:
+                # Retrieve devices with the latest timestamp
+                latest_devices = gateway.devices.filter(timestamp=latest_timestamp['timestamp'])
+
+                # Group devices by device_type
+                grouped_devices = {
+                    "com1": [],
+                    "com2": [],
+                    "E1": [],
+                    "E2": []
+                }
+
+                for device in latest_devices:
+                    device_info = {
+                        "device_type": device.device_type,
+                        "name": device.name,
+                        "type": device.type,
+                        "status": device.status,
+                        "value": device.value
+                    }
+                    if device.device_type in grouped_devices:
+                        grouped_devices[device.device_type].append(device_info)
+
+                # Prepare the structured data for the current gateway
+                gateway_info = {
+                    "gateway": gateway.gateway_name,
+                    "ports": {
+                        "com1": grouped_devices["com1"],
+                        "com2": grouped_devices["com2"],
+                        "E1": grouped_devices["E1"],
+                        "E2": grouped_devices["E2"]
+                    }
+                }
+
+            # Add the current gateway's info to the response list
+            response_data.append(gateway_info)
+
+        # Return the full list of gateways and their data
+        return JsonResponse(response_data, safe=False, status=200)
+
+    except Exception as e:
+        # Handle unexpected errors
+        return JsonResponse({"error": f"An error occurred: {str(e)}"}, status=500)
+
+    
+# value data for chart---------------------------------
+@csrf_exempt
+def fetch_value_data(request , gateway_name):
+    
+    try:
+        gateway = Gateway.objects.get(gateway_name=gateway_name)
+        
+        values_by_port = {
+            "com1" : [],
+            "com2" : [],
+            "E1" : [],
+            "E2" : []
+        }
+        for device in gateway.devices.all():
+            if device.device_type in values_by_port:
+                values_by_port[device.device_type].append(device.value)
+                
+        response_data = {
+            "title" :f"{gateway.gateway_name}",
+            "series" :[
+                {"name" : "com1", "data" : values_by_port["com1"]},
+                {"name" : "com2", "data" : values_by_port["com2"]},
+                {"name" : "E1", "data" : values_by_port["E1"]},
+                {"name" : "E2", "data" : values_by_port["E2"]},
+            ]
+        }  
+        return JsonResponse(response_data , status=200)
+    except Gateway.DoesNotExist:
+        return JsonResponse({'message' : 'Gateway not found'}, status=404)
+    
+# specefic type data--------------------------------------last 20 values
+@csrf_exempt
+def fetch_device_data(request, gateway_name, device_type, device_subtype):
+    try:
+        
+        gateway = Gateway.objects.get(gateway_name=gateway_name)
+
+    
+        filtered_devices = gateway.devices.filter(
+            device_type__iexact=device_type,
+            name__iexact=device_subtype
+        ).order_by('-timestamp')[:20]
+
+        if not filtered_devices.exists():
+            return JsonResponse(
+                {"error": f"No data found for {device_type} {device_subtype} in gateway {gateway_name}"},
+                status=404
+            )
+
+        
+        device_list = []
+        for device in filtered_devices:
+            device_info = {
+                "device_type": device.device_type, 
+                "name": device.name,         
+                "type": device.type,      
+                "status": device.status,  
+                "value": device.value,   
+                "timestamp": device.timestamp.isoformat() 
+            }
+            device_list.append(device_info)
+
+        # Structure the response in the requested format
+        response_data = {
+            "gateway": gateway.gateway_name,
+            "ports": [
+                device_list  # Devices are grouped as a single list for the requested `device_type` and `type`
+            ]
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    except Gateway.DoesNotExist:
+        return JsonResponse({"error": "Gateway not found"}, status=404)
+
+# fetching whole data
+@csrf_exempt
+def fetch_whole_device_data(request, gateway_name, device_type, device_subtype):
+    try:
+        
+        gateway = Gateway.objects.get(gateway_name=gateway_name)
+
+    
+        filtered_devices = gateway.devices.filter(
+            device_type__iexact=device_type,
+            name__iexact=device_subtype
+        )
+
+        if not filtered_devices.exists():
+            return JsonResponse(
+                {"error": f"No data found for {device_type} {device_subtype} in gateway {gateway_name}"},
+                status=404
+            )
+
+        
+        device_list = []
+        for device in filtered_devices:
+            device_info = {
+                "device_type": device.device_type, 
+                "name": device.name,         
+                "type": device.type,      
+                "status": device.status,  
+                "value": device.value,   
+                "timestamp": device.timestamp.isoformat() 
+            }
+            device_list.append(device_info)
+
+        # Structure the response in the requested format
+        response_data = {
+            "gateway": gateway.gateway_name,
+            "ports": [
+                device_list  # Devices are grouped as a single list for the requested `device_type` and `type`
+            ]
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    except Gateway.DoesNotExist:
+        return JsonResponse({"error": "Gateway not found"}, status=404)
+    
+    
+@csrf_exempt
+def assign_gateway_to_project(request):
+    """
+    Assign a gateway to a project.
+    """
+    if request.method == 'POST':
+        try:
+            # Get the data from the request body
+            data = json.loads(request.body)
+            project_id = data.get("project_id")
+            gateway_id = data.get("gateway_id")
+
+            if not project_id or not gateway_id:
+                return JsonResponse({"error": "Missing project_id or gateway_id"}, status=400)
+
+            # Fetch the project and gateway objects
+            project = get_object_or_404(Project_Manager, PM_id=project_id)
+            gateway = get_object_or_404(Gateways, G_id=gateway_id)
+
+            # Assign the gateway to the project
+            gateway.project = project
+            gateway.save()
+
+            return JsonResponse({
+                "message": f"Gateway {gateway.gateway_name} successfully assigned to project {project.name}"
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    else:
+        return HttpResponse(status=405)  # Method Not Allowed
+
+    
+def get_gateways_for_project(request):
+    """
+    Get a list of all gateways assigned to a project.
+    """
+    if request.method == 'GET':
+        try:
+            project_id = request.GET.get("project_id")
+
+            # Fetch the project
+            project = get_object_or_404(Project_Manager, PM_id=project_id)
+
+            # Fetch all gateways associated with the project
+            gateways = Gateways.objects.filter(project=project)
+
+            # Prepare the data to return
+            gateways_data = [{
+                "G_id": gateway.G_id,
+                "gateway_name": gateway.gateway_name,
+                "mac_address": gateway.mac_address,
+                "status": gateway.status,
+                "deploy_status": gateway.deploy_status,
+                "config": gateway.config,
+            } for gateway in gateways]
+
+            return JsonResponse({"gateways": gateways_data}, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    else:
+        return HttpResponse(status=405)  # Method Not Allowed
+    
+# create Metadata **********************************************
+@csrf_exempt
+def create_metadata(request):
+    if request.method == "POST":
+        try:
+            # Parse the JSON body
+            data = json.loads(request.body)
+
+            # Extract required fields
+            analyzer_id = data.get("analyzer_id")
+            mac_address = data.get("mac_address")
+            values = data.get("values", {})  # Expecting a dictionary of values
+
+            # Validate analyzer_id
+            if not analyzer_id:
+                return JsonResponse({"message": "Analyzer ID is required"}, status=400)
+
+            # Fetch the Analyzer and Gateway
+            analyzer = Analyzer.objects.filter(analyzer_id=analyzer_id).first()
+            if not analyzer:
+                return JsonResponse({"message": "Analyzer not found"}, status=404)
+
+            gateway = analyzer.gateway
+            if not gateway:
+                return JsonResponse({"message": "Gateway associated with this analyzer not found"}, status=404)
+
+            # Validate mac_address matches the gateway
+            if gateway.mac_address != mac_address:
+                return JsonResponse({"message": "MAC address does not match the gateway"}, status=400)
+
+            # Create the MetaData instance
+            metadata = MetaData.objects.create(
+                mac_address=mac_address,
+                gateway=gateway,
+                MOD_id=analyzer.MOD_id,
+                analyzer=analyzer,
+                **{
+                    f"value{i}_name": values.get(f"value{i}_name", "")
+                    for i in range(1, 21)
+                },
+                **{
+                    f"value{i}_address": values.get(f"value{i}_address", "")
+                    for i in range(1, 21)
+                },
+                **{
+                    f"value{i}_value": values.get(f"value{i}_value", None)
+                    for i in range(1, 21)
+                },
+            )
+
+            # Respond with the created metadata
+            return JsonResponse(
+                {
+                    "message": "MetaData created successfully",
+                    "metadata_id": metadata.MD_id,
+                },
+                status=201,
+            )
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({"error": str(e)}, status=400)
+
+    return JsonResponse({"message": "Invalid request method"}, status=405)
+
+
+#  get metadata****************************************************************
+@csrf_exempt
+def get_metadata(request, analyzer_id):
+    if request.method == "GET":
+        try:
+            # Fetch the latest metadata for the given analyzer_id
+            metadata = MetaData.objects.filter(analyzer__analyzer_id=analyzer_id).order_by('-timestamp').first()
+
+            if not metadata:
+                return JsonResponse({"message": "No metadata found for this analyzer"}, status=404)
+
+            # Prepare metadata response
+            metadata_response = {
+                "MD_id": metadata.MD_id,
+                "mac_address": metadata.mac_address,
+                "MOD_id": metadata.MOD_id,
+                "values": {
+                    f"value{i}_name": getattr(metadata, f"value{i}_name") for i in range(1, 21)
+                },
+                "values_address": {
+                    f"value{i}_address": getattr(metadata, f"value{i}_address") for i in range(1, 21)
+                },
+                "values_value": {
+                    f"value{i}_value": getattr(metadata, f"value{i}_value") for i in range(1, 21)
+                },
+                "timestamp": metadata.timestamp,  # Include timestamp for the latest record
+            }
+
+            return JsonResponse({"metadata": metadata_response}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({"error": str(e)}, status=400)
+
+    return JsonResponse({"message": "Invalid request method"}, status=405)
+
+# for getting the specefic value data and show in highchart****************************************************************
+@csrf_exempt
+def get_analyzer_value_data(request, analyzer_id, value_name):
+    if request.method == 'GET':
+        try:
+            # Parse date range parameters
+            from_date = request.GET.get('from', None)
+            to_date = request.GET.get('to', None)
+
+            if from_date and to_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')
+                to_date = datetime.strptime(to_date, '%Y-%m-%d')
+            else:
+                # Default to the last 30 days if no date range is provided
+                to_date = datetime.now()
+                from_date = to_date - timedelta(days=30)  # Corrected usage of timedelta
+
+            # Fetch the data for the specified analyzer and value_name
+            data = MetaData.objects.filter(analyzer__analyzer_id=analyzer_id, timestamp__range=[from_date, to_date])
+            value_data = []
+            categories = []
+
+            for item in data:
+                # Corrected the attribute name access here
+                value = getattr(item, f"{value_name}")  # Dynamically access the correct value field
+                timestamp = item.timestamp
+                value_data.append([int(timestamp.timestamp() * 1000), value])  # Ensure the timestamp is an integer
+                categories.append(timestamp.strftime('%Y-%m-%d %H:%M:%S'))
+
+            # Prepare the response for Highcharts
+            response = {
+                'categories': categories,
+                'series': [{
+                    'name': value_name,
+                    'data': value_data
+                }]
+            }
+
+            return JsonResponse(response, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+        
+
+
+@csrf_exempt
+def post_metadata(request):
+    if request.method == "POST":
+        try:
+            # Decode and parse the JSON payload
+            data = json.loads(request.body.decode('utf-8'))
+            print(data)
+
+            # Validate gateway
+            gateway_name = data.get("gateway")
+            if not gateway_name:
+                return JsonResponse({"error": "Gateway name is required"}, status=400)
+
+            # Fetch or create the gateway
+            gateway, _ = Gateways.objects.get_or_create(gateway_name=gateway_name)
+
+            # Track analyzers to retain
+            valid_analyzers = []
+
+            # Process the ports
+            ports_data = data.get("ports", [])  # Add this line to fetch `ports_data` from the payload
+            for port_analyzers in ports_data:
+                for analyzer_data in port_analyzers:
+                    port_name = analyzer_data.get("port_name")
+                    if port_name:
+                        # Normalize port_name
+                        port_name = port_name.split('/')[-1].split('.')[0]
+                        # port_name = port_name.upper().replace("com", "COM_")  # Format to COM_1, COM_2, etc.
+
+
+                    analyzer_name = analyzer_data.get("name")
+                    analyzer_type = analyzer_data.get("type")
+                    analyzer_status = analyzer_data.get("status")
+                    values = analyzer_data.get("values", [])
+
+                    if not (port_name and analyzer_name and analyzer_type):
+                        return JsonResponse({"error": "Port name, analyzer name, and type are required"}, status=400)
+
+                    # Fetch or update analyzer
+                    analyzer, _ = Analyzer.objects.update_or_create(
+                        name=analyzer_name,
+                        gateway=gateway,
+                        port=port_name,
+                        defaults={
+                            "type": analyzer_type,
+                            "status": analyzer_status,
+                            "company_name": analyzer_data.get("company_name", "Unknown"),
+                        }
+                    )
+                    valid_analyzers.append(analyzer)
+
+                    # Always create a new metadata entry to store historical data
+                    metadata = MetaData.objects.create(
+                        gateway=gateway,
+                        analyzer=analyzer,
+                        mac_address=gateway.mac_address,
+                        MOD_id=f"{gateway_name}_{port_name}_{analyzer_name}_{uuid.uuid4().hex[:8]}"
+                    )
+
+                    # Save metadata values dynamically (max 20 values)
+                    for i, value in enumerate(values, start=1):
+                        if i > 20:  # Limit to 20 values
+                            break
+                        setattr(metadata, f"value{i}_name", value.get("name"))
+                        setattr(metadata, f"value{i}_address", value.get("address"))
+                        setattr(metadata, f"value{i}_value", value.get("value"))
+                    metadata.save()
+
+            # Remove obsolete analyzers (ensure analyzer_id is unique)
+            Analyzer.objects.filter(gateway=gateway).exclude(analyzer_id__in=[a.analyzer_id for a in valid_analyzers]).delete()
+
+            return JsonResponse({"message": "Data successfully created or updated"}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+# Add debug logs
+def fetch_metadata(request):
+    if request.method == "GET":
+        try:
+            gateway_name = request.GET.get("gateway")
+            if not gateway_name:
+                return JsonResponse({"error": "Gateway name is required"}, status=400)
+
+            gateway = Gateways.objects.get(gateway_name=gateway_name)
+            analyzers = Analyzer.objects.filter(gateway=gateway)
+
+            ports_data = []
+            for port_name in ["COM_1", "COM_2", "e1", "e2"]:
+                port_analyzers = []
+                port_analyzers_qs = analyzers.filter(port=port_name)
+                for analyzer in port_analyzers_qs:
+                    metadata = MetaData.objects.filter(analyzer=analyzer).order_by('-timestamp').first()
+                    values = [
+                        {
+                            "name": getattr(metadata, f"value{i}_name", None),
+                            "address": getattr(metadata, f"value{i}_address", None),
+                            "value": getattr(metadata, f"value{i}_value", None),
+                        }
+                        for i in range(1, 21)
+                        if getattr(metadata, f"value{i}_name", None)
+                    ]
+                    port_analyzers.append({
+                        "port_name": port_name,
+                        "name": analyzer.name,
+                        "type": analyzer.type,
+                        "status": analyzer.status,
+                        "values": values,
+                    })
+                ports_data.append({"port_name": port_name, "analyzers": port_analyzers})
+
+            # Log the response
+            response = {"gateway": gateway_name, "ports": ports_data}
+            # print("Fetch Metadata Response:", response)
+            return JsonResponse(response, status=200)
+
+        except Exception as e:
+            print("Fetch Metadata Error:", str(e))
+            return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def fetch_highchart_data(request):
+    if request.method == "GET":
+        try:
+            # Get query parameters
+            gateway_name = request.GET.get("gateway")
+            value_name = request.GET.get("value_name")
+            from_date = request.GET.get("from_date")
+            to_date = request.GET.get("to_date")
+            
+            if not gateway_name or not value_name:
+                return JsonResponse({"error": "Gateway name and value name are required"}, status=400)
+
+            # Convert the date strings to timezone-aware datetime objects
+            if from_date:
+                from_date = timezone.make_aware(
+                    datetime.strptime(from_date, "%Y-%m-%d"), timezone.get_current_timezone()
+                )
+                print("Timezone-aware from_date:", from_date)
+
+            if to_date:
+                to_date = timezone.make_aware(
+                    datetime.combine(
+                        datetime.strptime(to_date, "%Y-%m-%d"), datetime.max.time()
+                    ),
+                    timezone.get_current_timezone()
+                )
+                print("Timezone-aware to_date:", to_date)
+
+            # Fetch the gateway
+            try:
+                gateway = Gateways.objects.get(gateway_name=gateway_name)
+            except Gateways.DoesNotExist:
+                return JsonResponse({"error": "Gateway not found"}, status=404)
+
+            # Fetch analyzers for the gateway
+            analyzers = Analyzer.objects.filter(gateway=gateway)
+            if not analyzers.exists():
+                return JsonResponse({"error": "No analyzers found for the gateway"}, status=404)
+
+            # Prepare Highcharts data
+            highchart_data = []
+            for port_name in ["COM_1", "COM_2", "e1", "e2"]:
+                port_analyzers = analyzers.filter(port=port_name)
+                port_data = {
+                    "name": port_name,
+                    "data": []
+                }
+
+                for analyzer in port_analyzers:
+                    # Fetch all metadata entries for the analyzer within the date range
+                    metadata_entries = MetaData.objects.filter(analyzer=analyzer)
+
+                    if from_date:
+                        metadata_entries = metadata_entries.filter(timestamp__gte=from_date)
+                    if to_date:
+                        metadata_entries = metadata_entries.filter(timestamp__lte=to_date)
+
+                    value_series = []
+
+                    for metadata in metadata_entries:
+                        # Extract values dynamically by name
+                        for i in range(1, 21):
+                            name = getattr(metadata, f"value{i}_name", None)
+                            value = getattr(metadata, f"value{i}_value", None)
+                            if name == value_name:
+                                # Convert timestamp to milliseconds and append the value
+                                timestamp_ms = int(metadata.timestamp.timestamp() * 1000)
+                                value_series.append([timestamp_ms, value])
+
+                    if value_series:
+                        # Add analyzer data to the port's data series
+                        port_data["data"].append({
+                            "name": analyzer.name,
+                            "data": value_series
+                        })
+
+                if port_data["data"]:
+                    highchart_data.append(port_data)
+
+            # Return Highcharts formatted data
+            return JsonResponse({
+                "gateway": gateway_name,
+                "value_name": value_name,
+                "ports": highchart_data
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+# get the values to show in animation
+@csrf_exempt
+def analyzer_values(request, gateway_name):
+    if request.method == "GET":
+        try:
+            # Fetch the gateway by name
+            gateway = Gateways.objects.filter(gateway_name=gateway_name).first()
+            if not gateway:
+                return JsonResponse({"error": "Gateway not found"}, status=404)
+
+            # Initialize the response structure
+            response_data = {
+                "gateway_name": gateway.gateway_name,
+                "mac_address": gateway.mac_address,
+                "analyzers": [],
+            }
+
+            # Fetch all analyzers associated with the gateway
+            analyzers = Analyzer.objects.filter(gateway=gateway)
+
+            # Iterate through each analyzer
+            for analyzer in analyzers:
+                # Get the latest metadata for the analyzer
+                latest_metadata = (
+                    MetaData.objects.filter(analyzer=analyzer)
+                    .order_by("-created_at")  # Assuming `created_at` is a timestamp field
+                    .first()
+                )
+
+                if latest_metadata:
+                    # Gather the 20 values dynamically
+                    values = []
+                    for i in range(1, 21):  # Assuming 20 dynamic value fields
+                        value_name = getattr(latest_metadata, f"value{i}_name", None)
+                        value_address = getattr(latest_metadata, f"value{i}_address", None)
+                        value_value = getattr(latest_metadata, f"value{i}_value", None)
+
+                        if value_name or value_address or value_value:
+                            values.append({
+                                "name": value_name,
+                                "address": value_address,
+                                "value": value_value,
+                            })
+
+                    # Append analyzer data to the response
+                    response_data["analyzers"].append({
+                        "name": analyzer.name,
+                        "type": analyzer.type,
+                        "status": analyzer.status,
+                        "company_name": analyzer.company_name,
+                        "values": values,
+                    })
+
+            return JsonResponse(response_data, status=200)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+
+# getting the gateway nmae and mac address for dropdown in project manager react jsx
+@csrf_exempt
+def fetch_deployed_gateways_name_mac(request):
+    if request.method == "GET":
+        try:
+            # Get project_id from query parameters
+            project_id = request.GET.get('project_id')
+            if not project_id:
+                return JsonResponse({'message': 'Project ID is required'}, status=400)
+
+            # Debug: Log the incoming project_id
+            print(f"Fetching deployed gateways for Project ID: {project_id}")
+
+            # Fetch gateways with 'deployed' status and matching project_id
+            deployed_gateways = Gateways.objects.filter(deploy_status='deployed', project_id=project_id)
+
+            if not deployed_gateways.exists():
+                print(f"No deployed gateways found for Project ID: {project_id}")
+                return JsonResponse({'message': 'No deployed gateways found for the project'}, status=404)
+
+            # Prepare response data with only gateway_name and mac_address
+            gateways_data = [
+                {
+                    'gateway_name': gateway.gateway_name,
+                    'mac_address': gateway.mac_address
+                }
+                for gateway in deployed_gateways
+            ]
+
+            # Debug: Confirm the number of gateways found
+            print(f"Found {len(gateways_data)} gateways for Project ID: {project_id}")
+
+            return JsonResponse({'deployed_gateways': gateways_data}, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+

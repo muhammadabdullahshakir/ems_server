@@ -1,8 +1,14 @@
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+from . import views
+
 from .views import create_user , create_project , login_user , get_user_data , total_uers ,get_latest_project_data,latest_project_data , add_hardware , hardware_count , connected_hardware_count
-from .views import user_project ,fetching_users , delete_user ,update_user
+from .views import user_project ,fetching_users , delete_user ,update_user , fetch_Hardware , update_hardware , delete_hardware , delete_selected_user, delete_selected_hardware , Create_Project_Manager ,Fetch_Projects,total_hardware_count,total_connected_hardware,total_project,fetches_total_hardware
+from .views import active_project , fetch_assigned_hardware, fetch_all_projects,logout_user, create_box , get_boxes,create_Gateways , fetch_gateway , fetch_value_data,fetch_device_data,fetch_whole_device_data,fetch_all_gateways,create_gateway,get_analyzers_by_gateway,create_analyzer,Get_Project_Manager,create_ports,fetch_ports,fetch_analyzers_by_port,get_all_gateways
+from .views import Get_All_Projects , get_unassigned_gateways,assign_gateways_to_user,fetch_gateways_of_user,fetch_gateways_of_usersList,assign_gateway_to_project,get_gateways_for_project,update_gateway,fetch_deployed_gateways_of_user,create_metadata,get_metadata,get_analyzer_value_data,get_total_gateways,get_deployed_gateways,get_user_aloted_gateways,post_metadata, fetch_metadata,fetch_highchart_data,analyzer_values,fetch_deployed_gateways_name_mac
 urlpatterns = [
-    path('create-user/', create_user, name='create_user'),
+    path('create_user/', create_user, name='create_user'),
     path('create_project/',create_project , name='create_project'),
     path('get_latest_project_data/',get_latest_project_data, name='get_latest_project_data'),
     path('login_user/', login_user , name='login_user'),
@@ -15,6 +21,66 @@ urlpatterns = [
     path('user_project/', user_project , name='user_project'),
     path('fetch_users/', fetching_users , name='fetching_users'),
     path('delete_user/<int:user_id>/',delete_user, name='delete_user'),
-    path('update_user/<int:user_id>/', update_user , name='update_user')
+    path('update_user/<int:user_id>/', update_user , name='update_user'),
+    path('fetch_hardware/<int:user_id>/', fetch_Hardware, name='fetch_Hardware'),
+    path('update_hardware/<int:hardware_id>/', update_hardware , name='update_hardware'),
+    path('delete_hardware/<int:hardware_id>/', delete_hardware, name='delete_hardware'),
+    path('delete_selected_user/' , delete_selected_user, name='delete_selected_user'),
+    path('delete_selected_hardware/', delete_selected_hardware, name='delete_selected_hardware'),
+    path('create_project_manager/',Create_Project_Manager , name='create_project_manager'),
+    path('get_project_manager/<int:user_id>/',Get_Project_Manager, name='get_project_manager'),
+    path('Get_All_Projects/',Get_All_Projects,name='Get_All_Projects'),
+    path('Fetch_Projects/',Fetch_Projects,name='Fetch_Projects'),
+    path('total_hardware_count/', total_hardware_count, name='total_hardware_count'),
+    path('total_connected_hardware/',total_connected_hardware,name='total_connected_hardware'),
+    path('total_project/', total_project , name='total_project'),
+    path('fetches_total_hardware',fetches_total_hardware,name='fetches_total_hardware'),
+    path('active_project/', active_project,name='active_project'),
+    path('fetch_assigned_hardware/', fetch_assigned_hardware , name='fetch_assigned_hardware'),
+    path('fetch_all_projects/', fetch_all_projects , name='fetch_all_projects'),
+    path('logout/',logout_user,name='logout'),
+    path('create_box/', create_box, name='create_box'),
+    path('get_boxes/', get_boxes, name='get_boxes'),
+    path('create_gateway/',create_gateway, name='create_gateway'),
+    path('fetch_gateway/<str:gateway_name>/',fetch_gateway, name='fetch_gateway'),
+    path('fetch_value_data/<str:gateway_name>/',fetch_value_data,name='fetch_value_data'),
+    path('fetch_device_data/<str:gateway_name>/<str:device_type>/<str:device_subtype>/',fetch_device_data,name='fetch_device_data'),
+    path('fetch_whole_device_data/<str:gateway_name>/<str:device_type>/<str:device_subtype>/',fetch_whole_device_data,name='fetch_whole_device_data'),
+    path('fetch_all_gateways/',fetch_all_gateways,name='fetch_all_gateways'),
+    path('create_Gateways/',create_Gateways,name='create_Gateways'),
+    path('get_analyzers_by_gateway/<int:gateway_id>/',get_analyzers_by_gateway, name='get_analyzers_by_gateway'),
+    path('analyzers_create/', create_analyzer, name='create_analyzer'),
+    path('create_port/',create_ports, name='create_ports'),
+    path('fetch_ports/',fetch_ports,name='fetch_ports'),
+    path('fetch_analyzers_by_port/<int:port_id>/',fetch_analyzers_by_port, name='fetch_analyzers_by_port'),
+    path('get_all_gateways/',get_all_gateways,name='get_all_gateways'),
+    path('get_unassigned_gateways/',get_unassigned_gateways,name='get_unassigned_gateways'),
+    path('assign_gateways_to_user/',assign_gateways_to_user,name='assign_gateways_to_user'),
+    path('fetch_gateways_of_user/',fetch_gateways_of_user,name='fetch_gateways_of_user'),
+    path('fetch_gateways_of_usersList/',fetch_gateways_of_usersList,name='fetch_gateways_of_usersList'),
+    path('assign_gateway_to_project/', assign_gateway_to_project, name='assign_gateway_to_project'),
+    path('get_gateways_for_project/', get_gateways_for_project, name='get_gateways_for_project'),
+    path('update_gateway/', update_gateway, name='update_gateway'),
+    path('fetch_deployed_gateways_of_user/', fetch_deployed_gateways_of_user, name='fetch_deployed_gateways_of_user'),
+    path('create_metadata/',create_metadata,name='create_metadata'),
+    path('get_metadata/<int:analyzer_id>/',get_metadata,name='get_metadata'),
+    path('get_analyzer_value_data/<int:analyzer_id>/<str:value_name>/',get_analyzer_value_data,name='get_analyzer_value_data'),
+    path('get_total_gateways/',get_total_gateways,name='get_total_gateways'),
+    path('get_deployed_gateways/',get_deployed_gateways,name='get_deployed_gateways'),
+    path('get_user_aloted_gateways/',get_user_aloted_gateways,name='get_user_aloted_gateways'),
+    path('post_matadata/',post_metadata,name='create_gateway_data'),
+    path('fetch_metadata/',fetch_metadata,name='get_gateway_data'),
+    path('fetch_highchart_data/',fetch_highchart_data,name='fetch_highchart_data'),
+    path('gateway/<str:gateway_name>/analyzers/',analyzer_values, name='analyzers_values'),
+    path('fetch_deployed_gateways_name_mac/',fetch_deployed_gateways_name_mac,name='fetch_deployed_gateways_name_mac')
 
-]
+
+
+
+    
+    
+    
+    
+    
+   
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
