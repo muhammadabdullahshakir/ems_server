@@ -1,4 +1,10 @@
-Django==4.1.4
-gunicorn==19.9.0
+asgiref
+Django
 django-cors-headers
-pillow
+djangorestframework
+djangorestframework-simplejwt
+PyJWT
+pytz
+sqlparse
+psycopg2-binary
+python-dotenv

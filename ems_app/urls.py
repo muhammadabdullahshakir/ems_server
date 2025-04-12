@@ -7,8 +7,11 @@ from .views import create_user , create_project , login_user , get_user_data , t
 from .views import user_project ,fetching_users , delete_user ,update_user , fetch_Hardware , update_hardware , delete_hardware , delete_selected_user, delete_selected_hardware , Create_Project_Manager ,Fetch_Projects,total_hardware_count,total_connected_hardware,total_project,fetches_total_hardware
 from .views import active_project , fetch_assigned_hardware, fetch_all_projects,logout_user, create_box , get_boxes,create_Gateways , fetch_gateway , fetch_value_data,fetch_device_data,fetch_whole_device_data,fetch_all_gateways,create_gateway,get_analyzers_by_gateway,create_analyzer,Get_Project_Manager,create_ports,fetch_ports,fetch_analyzers_by_port,get_all_gateways
 from .views import Get_All_Projects , get_unassigned_gateways,assign_gateways_to_user,fetch_gateways_of_user,fetch_gateways_of_usersList,assign_gateway_to_project,get_gateways_for_project,update_gateway,fetch_deployed_gateways_of_user,create_metadata,get_metadata,get_analyzer_value_data,get_total_gateways,get_deployed_gateways,get_user_aloted_gateways,post_metadata, fetch_metadata,fetch_highchart_data,analyzer_values,fetch_deployed_gateways_name_mac
+from .views import get_power_data, invoice_api, total_projecta
+from .views import total_admin, admin_detail, total_project_user, get_total_gateways_user, admin_detail_superadmin, create_or_update_subscription, create_admin, create_admincr, create_superadmincr, fetching_user
+
 urlpatterns = [
-    path('create_user/', create_user, name='create_user'),
+    path('create_user/<int:users_id>/', create_user, name='create_user'),
     path('create_project/',create_project , name='create_project'),
     path('get_latest_project_data/',get_latest_project_data, name='get_latest_project_data'),
     path('login_user/', login_user , name='login_user'),
@@ -72,15 +75,19 @@ urlpatterns = [
     path('fetch_metadata/',fetch_metadata,name='get_gateway_data'),
     path('fetch_highchart_data/',fetch_highchart_data,name='fetch_highchart_data'),
     path('gateway/<str:gateway_name>/analyzers/',analyzer_values, name='analyzers_values'),
-    path('fetch_deployed_gateways_name_mac/',fetch_deployed_gateways_name_mac,name='fetch_deployed_gateways_name_mac')
+    path('fetch_deployed_gateways_name_mac/',fetch_deployed_gateways_name_mac,name='fetch_deployed_gateways_name_mac'),
+    path('api/power-data/', get_power_data, name='get_power_data'),
+    path('admin_count/', total_admin , name='total_admin'),
+    path('admin_detail/', admin_detail , name='admin_detail'),
+    path('create_admin/', create_admin , name='create_admin'),
+    path('total_user_detail/', total_project_user , name='total_project_user'),
+    path('get_total_gateways_user/', get_total_gateways_user, name='get_total_gateways_user'),
+    path('admin_detail_superadmin/', admin_detail_superadmin, name='admin_detail_superadmin'),
+    path('create_or_update_subscription/', create_or_update_subscription, name='create_or_update_subscription'),
+    path('create_admincrt/', create_admincr, name='create_admincr'),
+    path('create_superadmincrt/', create_superadmincr, name='create_superadmincr'),
+    path('fetching_user/', fetching_user, name='fetching_user'),
+    path('total_projecta/', total_projecta, name='total_projecta'),
+    path('invoice/', invoice_api),
 
-
-
-
-    
-    
-    
-    
-    
-   
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,12 +1,14 @@
 from django.db import models
 from django.utils import timezone
 import uuid
-
+import threading
+from datetime import timedelta  
 
 class User(models.Model):
     ROLES = (
         ('admin', 'Admin'),
-        ('user', 'User')
+        ('user', 'User'),
+        ('superadmin', 'superadmin')
     )
     user_id = models.AutoField(primary_key=True)
     firstname = models.CharField(max_length=150)
@@ -55,8 +57,6 @@ class User_Project(models.Model):
     user_id = models.ForeignKey(User , on_delete=models.CASCADE)
     hardware_id = models.ForeignKey('Hardware', on_delete=models.CASCADE)
 
-    
-
 class Hardware(models.Model):
     hardware_id = models.AutoField(primary_key=True)
     project_id = models.ForeignKey(Project, on_delete=models.CASCADE, null=True , blank=True)
@@ -65,8 +65,7 @@ class Hardware(models.Model):
     is_connected = models.BooleanField(default=False)
     connected_at = models.DateTimeField(auto_now_add=True)
     
-# **************************************************************************************************
-    
+
 class Gateways(models.Model):
     G_id = models.AutoField(primary_key=True)
     gateway_name = models.CharField(max_length=50)
@@ -183,11 +182,77 @@ class MetaData(models.Model):
     gateway = models.ForeignKey(Gateways , on_delete=models.CASCADE,related_name='gateways') 
     MOD_id = models.CharField(max_length=60)
     analyzer = models.ForeignKey(Analyzer, on_delete=models.CASCADE, related_name='analyzer')
+    gateway = models.ForeignKey(Gateways , on_delete=models.CASCADE,related_name='gateways') 
+
+
+
+    created_at = models.DateTimeField(auto_now_add=True)
     for i in range(1, 21):
         exec(f'value{i}_name = models.CharField(max_length=100, blank=True, null=True)')
         exec(f'value{i}_address = models.CharField(max_length=200, blank=True, null=True)')
         exec(f'value{i}_value = models.FloatField(blank=True, null=True)')
     created_at = models.DateTimeField(auto_now_add=True)
+    total_power = models.FloatField(default=0.0)
+    setpoint1 = models.FloatField(default=0.0)
+    setpoint2 = models.FloatField(default=0.0)
+    total_grid = models.FloatField(default=0.0)
+    total_Generator = models.FloatField(default=0.0)
+    total_solar = models.FloatField(default=0.0)
     timestamp = models.DateTimeField(auto_now_add=True)  # Add timestamp for filtering
 
-    
+class Subscription(models.Model):
+    sub_id = models.AutoField(primary_key=True)
+    user_id = models.ForeignKey(User, on_delete=models.CASCADE)
+    warn_days = models.IntegerField(default=30)  # New field
+    stop_days = models.IntegerField(default=30)  # New field
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    Active_date = models.DateField(null=True, blank=True)
+    deactive = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=[
+        ('Active', 'Active'),
+        ('Deactive', 'Deactive')
+    ], default='Deactive')
+
+    def __str__(self):
+        return f"Subscription {self.sub_id} for {self.user_id}"
+
+class InvoiceTable(models.Model):
+    inv_id = models.AutoField(primary_key=True)
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE)
+    start_date = models.DateTimeField()
+    end_date = models.DateField()
+    billing_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=[
+        ('Pending', 'Pending'),
+        ('Paid', 'Paid'),
+        ('Overdue', 'Overdue')
+    ], default='Pending')
+
+
+    def save(self, *args, **kwargs):
+         
+        # Set billing price with discount logic from Subscription
+        if self.subscription:
+            discount_amount = (self.subscription.price * self.subscription.discount) / 100
+            self.billing_price = self.subscription.price
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Invoice {self.inv_id} for Subscription {self.subscription.sub_id}"
+
+
+class admincr(models.Model):
+    sub_id = models.AutoField(primary_key=True)  # Subscription ID
+    cr_id = models.CharField(max_length=20)
+    admin_id = models.CharField(max_length=20)
+    def __str__(self):
+        return f"Subscription {self.sub_id}"
+
+
+class superadmincr(models.Model):
+    sub_id = models.AutoField(primary_key=True)  # Subscription ID
+    superadmin_id = models.CharField(max_length=20)
+    admin_id = models.CharField(max_length=20)
+    def __str__(self):
+        return f"Subscription {self.sub_id}"

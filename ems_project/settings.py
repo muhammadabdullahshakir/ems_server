@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,7 +32,6 @@ CSRF_TRUSTED_ORIGINS = ['https://ems-webapp-530056698.us-central1.run.app']
 #https://ems-webapp-530056698.us-central1.run.app/
 
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ems_app",
     "corsheaders",
+    'rest_framework',
+    'rest_framework_simplejwt',
 ]
 
 MIDDLEWARE = [
@@ -57,6 +59,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
 ]
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWS_CREDENTIALS = True
+
+
 
 ROOT_URLCONF = "ems_project.urls"
 
@@ -66,6 +71,27 @@ SESSION_COOKIE_AGE = 300
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=59),  
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),   
+    "ROTATE_REFRESH_TOKENS": True,          
+    "BLACKLIST_AFTER_ROTATION": True,     
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": "123456789",      
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "user_id", 
+}
+
 
 TEMPLATES = [
     {

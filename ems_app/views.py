@@ -6,20 +6,327 @@ from django.forms import ValidationError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from .models import E1, E2, Com1, Com2, User , Project ,Hardware , User_Project , Project_Manager,Box, Device, Gateway,Gateways,Analyzer,Com1 , Com2 , E1 ,E2,MetaData
+from .models import E1, E2, Com1, Com2, User , Project ,Hardware , User_Project , Project_Manager,Box, Device, Gateway,Gateways,Analyzer,Com1 , Com2 , E1 ,E2,MetaData, admincr, superadmincr, InvoiceTable
 import json
 from django.utils import timezone
 from datetime import datetime,timedelta
+from datetime import timedelta  
+from .models import Subscription, User
+from datetime import datetime, timedelta 
+from django.http import JsonResponse, HttpRequest
 import logging
 import base64
 from django.views import View
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 # from django.core.files.uploadedfile import InMemoryUploadedFile
 # from django.core.files.storage import default_storage
-
+import requests
 
 
 @csrf_exempt
-def create_user(request):
+def create_admincr(request):
+    if request.method == 'POST':
+        try:
+            # Parse incoming JSON data
+            data = json.loads(request.body)
+
+            # Extract data from the request body
+            cr_id = data.get('cr_id')
+            admin_id = data.get('admin_id')
+
+            # Basic validation for required fields
+            if not cr_id or not admin_id:
+                return JsonResponse({'error': 'cr_id and admin_id are required fields.'}, status=400)
+
+            try:
+                # Retrieve the superadmin instance by superadmin_id (check if superadmin_id exists)
+                cr_id_instance = User.objects.get(user_id=cr_id_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User with the given cr_id_id does not exist.'}, status=404)
+
+            # Ensure the superadmin's role is 'superadmin'
+            if cr_id_instance.role != 'user':
+                return JsonResponse({'error': 'The user does not have the required role (user).'}, status=403)
+
+            try:
+                # Retrieve the admin instance by admin_id (check if admin_id exists)
+                admin_instance = User.objects.get(user_id=admin_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User with the given admin_id does not exist.'}, status=404)
+
+            # Ensure the admin's role is 'admin'
+            if admin_instance.role != 'admin':
+                return JsonResponse({'error': 'The user does not have the required role (admin).'}, status=403)
+
+
+            # Create a new admincr entry
+            new_entry = admincr.objects.create(
+                cr_id=cr_id,
+                admin_id=admin_id
+            )
+
+            # Return the response with the created entry details
+            return JsonResponse({
+                'message': 'admincr entry created successfully',
+                'sub_id': new_entry.sub_id,
+                'cr_id': new_entry.cr_id,
+                'admin_id': new_entry.admin_id
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Invalid HTTP method. Use POST.'}, status=405)
+
+@csrf_exempt
+def create_superadmincr(request):
+    if request.method == 'POST':
+        try:
+            # Parse incoming JSON data
+            data = json.loads(request.body)
+
+            # Extract data from the request body
+            superadmin_id = data.get('superadmin_id')
+            admin_id = data.get('admin_id')
+
+            # Basic validation for required fields
+            if not superadmin_id or not admin_id:
+                return JsonResponse({'error': 'superadmin_id and admin_id are required fields.'}, status=400)
+
+
+            try:
+                # Retrieve the superadmin instance by superadmin_id (check if superadmin_id exists)
+                superadmin_instance = User.objects.get(user_id=superadmin_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User with the given superadmin_id does not exist.'}, status=404)
+
+            # Ensure the superadmin's role is 'superadmin'
+            if superadmin_instance.role != 'superadmin':
+                return JsonResponse({'error': 'The user does not have the required role (superadmin).'}, status=403)
+
+            try:
+                # Retrieve the admin instance by admin_id (check if admin_id exists)
+                admin_instance = User.objects.get(user_id=admin_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User with the given admin_id does not exist.'}, status=404)
+
+            # Ensure the admin's role is 'admin'
+            if admin_instance.role != 'admin':
+                return JsonResponse({'error': 'The user does not have the required role (admin).'}, status=403)
+
+            # Create a new superadmincr entry
+            new_entry = superadmincr.objects.create(
+                superadmin_id=superadmin_id,
+                admin_id=admin_id
+            )
+
+            # Return the response with the created entry details
+            return JsonResponse({
+                'message': 'superadmincr entry created successfully',
+                'sub_id': new_entry.sub_id,
+                'superadmin_id': new_entry.superadmin_id,
+                'admin_id': new_entry.admin_id
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Invalid HTTP method. Use POST.'}, status=405)
+
+@csrf_exempt
+def invoice_api(request):
+    if request.method == 'GET':
+        inv_id = request.GET.get('inv_id')
+
+        if inv_id:
+            try:
+                invoice = InvoiceTable.objects.get(inv_id=inv_id)
+                data = {
+                    'inv_id': invoice.inv_id,
+                    'subscription': invoice.subscription.sub_id,
+                    'start_date': invoice.start_date,
+                    'end_date': invoice.end_date,
+                    'billing_price': float(invoice.billing_price),
+                    'status': invoice.status
+                }
+                return JsonResponse(data)
+            except InvoiceTable.DoesNotExist:
+                return JsonResponse({'error': 'Invoice not found'}, status=404)
+        else:
+            invoices = InvoiceTable.objects.all()
+            data = []
+            for invoice in invoices:
+                data.append({
+                    'inv_id': invoice.inv_id,
+                    'subscription': invoice.subscription.sub_id,
+                    'start_date': invoice.start_date,
+                    'end_date': invoice.end_date,
+                    'billing_price': float(invoice.billing_price),
+                    'status': invoice.status
+                })
+            return JsonResponse(data, safe=False)
+
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+
+            inv_id = data.get('inv_id')
+            status = data.get('status')
+
+            if not inv_id or not status:
+                return JsonResponse({'error': 'inv_id and status are required'}, status=400)
+
+            try:
+                invoice = InvoiceTable.objects.get(inv_id=inv_id)
+            except InvoiceTable.DoesNotExist:
+                return JsonResponse({'error': 'Invoice not found'}, status=404)
+
+            invoice.status = status
+            invoice.save()
+
+            return JsonResponse({
+                'inv_id': invoice.inv_id,
+                'subscription': invoice.subscription.sub_id,
+                'start_date': invoice.start_date,
+                'end_date': invoice.end_date,
+                'billing_price': float(invoice.billing_price),
+                'status': invoice.status,
+                'message': 'Invoice status updated successfully'
+            }, status=200)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    else:
+        return JsonResponse({'error': 'Unsupported HTTP method'}, status=405)
+
+@csrf_exempt
+def create_or_update_subscription(request):
+    if request.method == 'GET':
+        try:
+            # Fetch all subscriptions and related user data
+            subscriptions = Subscription.objects.select_related('user_id').all()
+            subscription_data = []
+
+            for sub in subscriptions:
+                user = sub.user_id
+                if not user:
+                    continue  # Skip if user is missing
+
+                sub_dict = {
+                    'sub_id': sub.sub_id,
+                    'warn_days': sub.warn_days,
+                    'stop_days': sub.stop_days,
+                    'price': str(sub.price),
+                    'discount': str(sub.discount),
+                    'Active_date': sub.Active_date,
+                    'deactive': sub.deactive,
+                    'status': sub.status,
+                    'user_id': user.user_id,
+                    'email': user.email,
+                    'contact': user.contact,
+                    'firstname': user.firstname,
+                    'lastname': user.lastname
+                }
+                subscription_data.append(sub_dict)
+
+            return JsonResponse(subscription_data, safe=False)
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return JsonResponse({'error': str(e)}, status=500)
+
+ 
+
+
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+
+            # Extract values
+            user_id = data.get('user_id')
+            warn_days = data.get('warn_days', 30)  # Expecting int
+            stop_days = data.get('stop_days', 30)
+            price = data.get('price', 0)
+            discount = data.get('discount', 0)
+            status = data.get('status')
+
+
+            warn_days = int(warn_days)
+            stop_days = int(stop_days) if stop_days is not None else 0
+            if not all([user_id]):
+                return JsonResponse({'error': 'user_id, are required.'}, status=400)
+
+            try:
+                user_instance = User.objects.get(user_id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User with the given user_id does not exist.'}, status=404)
+
+
+            active_date = timezone.now()
+            warn_date = (active_date + timedelta(days=int(warn_days))).date()
+            stop_date = (warn_date + timedelta(days=int(stop_days)))
+    
+            # Create or update Subscription
+            subscription, created = Subscription.objects.update_or_create(
+                user_id=user_instance,
+                defaults={
+                    'warn_days': warn_days,
+                    'stop_days': stop_days,
+                    'price': price,
+                    'discount': discount,
+                    'Active_date': active_date,
+                    'status': status,
+                }
+            )
+
+            # Create Invoice
+            invoice = InvoiceTable(
+                subscription=subscription,
+                start_date=active_date,  # Now never null
+                end_date=warn_date
+            )
+            invoice.save()
+
+                    # Only create invoice if subscription is active
+            if subscription.status == "Active":
+                invoice = InvoiceTable.objects.create(
+                    subscription=subscription,
+                    start_date=active_date,
+                    end_date=warn_date
+                )
+                invoice.save()
+
+
+            return JsonResponse({
+                'sub_id': subscription.sub_id,
+                'user_id': subscription.user_id.user_id,
+                'warn_date': subscription.warn_days,
+                'stop_date': subscription.stop_days,
+                'price': float(subscription.price),
+                'discount': float(subscription.discount),
+                'inv_id': invoice.inv_id,
+                'message': 'Subscription and invoice created successfully.'
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON data.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
+
+@csrf_exempt
+def create_user(request, users_id):
     if request.method == 'POST':
         try:
             # Parse request data
@@ -85,8 +392,22 @@ def create_user(request):
                     return JsonResponse({'error': 'Hardware not found.'}, status=404)
 
             user.save()
+                        # Create Invoice
+            print(users_id)
+            admincr_obj = admincr(
+            cr_id=user.user_id,
+            admin_id=users_id
+            )
+            admincr_obj.save()
 
-            
+            sub_request = HttpRequest()
+            sub_request.method = 'POST'
+            sub_request._body = json.dumps({
+                'user_id': user.user_id,
+
+            }).encode('utf-8')
+            sub_request.META['CONTENT_TYPE'] = 'application/json'
+            sub_response = create_or_update_subscription(sub_request)
             return JsonResponse({
                 'id': user.user_id,
                 'firstname': user.firstname,
@@ -124,6 +445,9 @@ def login_user(request):
                 if user.password == password:
                     user.is_online = True
                     user.save()
+                    refresh = RefreshToken.for_user(user)
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
                     
                     return JsonResponse({
                         'success': True,
@@ -134,6 +458,8 @@ def login_user(request):
                         'role': user.role,
                         'image': user.image,
                         'unique_key' : str(user.unique_key),
+                        'access': access_token,
+                        'refresh': refresh_token,
                         'is_online' : user.is_online
                     }, status=200)
                     
@@ -338,21 +664,17 @@ def get_user_data(request):
     
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
-
-
-
 #getting total number of users
 @csrf_exempt
 def total_uers(request):
     if request.method == 'GET':
         try:
-            user_count = User.objects.count()
-            return JsonResponse({'total_users' : user_count}, status = 200)
-        except Exception as e :
-            return JsonResponse({'error' : str(e)}, status = 500)
-    return JsonResponse({'error': 'invalid method'}, status = 405)
-
-
+            # Count only users with role='user'
+            user_count = User.objects.filter(role='user').count()
+            return JsonResponse({'total_users': user_count}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'error': 'invalid method'}, status=405)
 
 
 #getting frequency and power factor
@@ -442,10 +764,6 @@ def hardware_count(request , project_id):
     return JsonResponse({'Error' : 'invalid method'}, status = 400)
             
 
-
-
-
-
 #getting connected hardware count
 @csrf_exempt
 def connected_hardware_count(request , project_id):
@@ -459,9 +777,6 @@ def connected_hardware_count(request , project_id):
         return JsonResponse({'project_id' : project_id , 'count' : count})
     return JsonResponse({'error' : 'invalid request'}, status = 400)
         
-
-
-
 
 #user_project related table view
 @csrf_exempt
@@ -492,8 +807,6 @@ def user_project(request):
             return JsonResponse({'Error' : 'Invalid json'})
     return JsonResponse({'Error' : 'Invvalid method'},status  = 400)
 
-
-
 #getting the whole user
 @csrf_exempt
 def fetching_users(request):
@@ -509,8 +822,10 @@ def delete_user(request , user_id):
     if request.method == 'POST':
         try:
             user = get_object_or_404(User , user_id = user_id)
+            print("users_id from URL parameter:", user_id)
             user.delete()
             return JsonResponse({'message' : 'User Deleted Successfully'}, status=200)
+            
         except Exception as e :
             return JsonResponse({'error' : str(e)}, status= 500)
     return JsonResponse({'error' : 'invalid request method'}, status = 405)
@@ -749,272 +1064,6 @@ def Get_Project_Manager(request, user_id):
             return JsonResponse({'error': str(e)}, status=500)
     
     return JsonResponse({'message': 'Invalid request method'}, status=405)
-
-
-#all project----------------------------------------------
-# @csrf_exempt
-# def Get_All_Projects(request):
-#     if request.method == 'GET':
-#         try:
-#             # Retrieve all projects
-#             projects = Project_Manager.objects.all()
-#             response_data = []
-
-#             # Iterate through each project to gather its details along with connected gateways
-#             for project in projects:
-#                 # Use the related_name 'gateways' to get the connected gateways
-#                 connected_gateways = project.gateways.all()
-                
-#                 # Prepare the gateway data
-#                 gateways_data = []
-#                 for gateway in connected_gateways:
-#                     # Fetch the analyzers for this gateway and group them by port
-#                     analyzers_by_port = {
-#                         'com1': [],
-#                         'com2': [],
-#                         'e1': [],
-#                         'e2': []
-#                     }
-
-#                     # Fetch the analyzers related to this gateway
-#                     analyzers = Analyzer.objects.filter(gateway=gateway)
-
-#                     # Group analyzers by their port (com1, com2, e1, e2)
-#                     for analyzer in analyzers:
-#                         if analyzer.port == 'com1':
-#                             analyzers_by_port['com1'].append({
-#                                 'analyzer_id': analyzer.analyzer_id,
-#                                 'name': analyzer.name,
-#                                 'company_name': analyzer.company_name,
-#                                 'type': analyzer.type,
-#                                 'status': analyzer.status,
-#                                 'values': {
-#                                     'value1': analyzer.value1,
-#                                     'address1': analyzer.address1,
-#                                     'value2': analyzer.value2,
-#                                     'address2': analyzer.address2,
-#                                     'value3': analyzer.value3,
-#                                     'address3': analyzer.address3,
-#                                     'value4': analyzer.value4,
-#                                     'address4': analyzer.address4,
-#                                     'value5': analyzer.value5,
-#                                     'address5': analyzer.address5,
-#                                     'value6': analyzer.value6,
-#                                     'address6': analyzer.address6,
-#                                     'value7': analyzer.value7,
-#                                     'address7': analyzer.address7,
-#                                     'value8': analyzer.value8,
-#                                     'address8': analyzer.address8,
-#                                     'value9': analyzer.value9,
-#                                     'address9': analyzer.address9,
-#                                     'value10': analyzer.value10,
-#                                     'address10': analyzer.address10,
-#                                     'value11': analyzer.value11,
-#                                     'address11': analyzer.address11,
-#                                     'value12': analyzer.value12,
-#                                     'address12': analyzer.address12,
-#                                     'value13': analyzer.value13,
-#                                     'address13': analyzer.address13,
-#                                     'value14': analyzer.value14,
-#                                     'address14': analyzer.address14,
-#                                     'value15': analyzer.value15,
-#                                     'address15': analyzer.address15,
-#                                     'value16': analyzer.value16,
-#                                     'address16': analyzer.address16,
-#                                     'value17': analyzer.value17,
-#                                     'address17': analyzer.address17,
-#                                     'value18': analyzer.value18,
-#                                     'address18': analyzer.address18,
-#                                     'value19': analyzer.value19,
-#                                     'address19': analyzer.address19,
-#                                     'value20': analyzer.value20,
-#                                     'address20': analyzer.address20
-#                                 }
-#                             })
-#                         elif analyzer.port == 'com2':
-#                             analyzers_by_port['com2'].append({
-#                                 'analyzer_id': analyzer.analyzer_id,
-#                                 'name': analyzer.name,
-#                                 'company_name': analyzer.company_name,
-#                                 'type': analyzer.type,
-#                                 'status': analyzer.status,
-#                                 'values': {
-#                                     'value1': analyzer.value1,
-#                                     'address1': analyzer.address1,
-#                                     'value2': analyzer.value2,
-#                                     'address2': analyzer.address2,
-#                                     'value3': analyzer.value3,
-#                                     'address3': analyzer.address3,
-#                                     'value4': analyzer.value4,
-#                                     'address4': analyzer.address4,
-#                                     'value5': analyzer.value5,
-#                                     'address5': analyzer.address5,
-#                                     'value6': analyzer.value6,
-#                                     'address6': analyzer.address6,
-#                                     'value7': analyzer.value7,
-#                                     'address7': analyzer.address7,
-#                                     'value8': analyzer.value8,
-#                                     'address8': analyzer.address8,
-#                                     'value9': analyzer.value9,
-#                                     'address9': analyzer.address9,
-#                                     'value10': analyzer.value10,
-#                                     'address10': analyzer.address10,
-#                                     'value11': analyzer.value11,
-#                                     'address11': analyzer.address11,
-#                                     'value12': analyzer.value12,
-#                                     'address12': analyzer.address12,
-#                                     'value13': analyzer.value13,
-#                                     'address13': analyzer.address13,
-#                                     'value14': analyzer.value14,
-#                                     'address14': analyzer.address14,
-#                                     'value15': analyzer.value15,
-#                                     'address15': analyzer.address15,
-#                                     'value16': analyzer.value16,
-#                                     'address16': analyzer.address16,
-#                                     'value17': analyzer.value17,
-#                                     'address17': analyzer.address17,
-#                                     'value18': analyzer.value18,
-#                                     'address18': analyzer.address18,
-#                                     'value19': analyzer.value19,
-#                                     'address19': analyzer.address19,
-#                                     'value20': analyzer.value20,
-#                                     'address20': analyzer.address20
-#                                 }
-#                             })
-#                         elif analyzer.port == 'e1':
-#                             analyzers_by_port['e1'].append({
-#                                 'analyzer_id': analyzer.analyzer_id,
-#                                 'name': analyzer.name,
-#                                 'company_name': analyzer.company_name,
-#                                 'type': analyzer.type,
-#                                 'status': analyzer.status,
-#                                 'values': {
-#                                     'value1': analyzer.value1,
-#                                     'address1': analyzer.address1,
-#                                     'value2': analyzer.value2,
-#                                     'address2': analyzer.address2,
-#                                     'value3': analyzer.value3,
-#                                     'address3': analyzer.address3,
-#                                     'value4': analyzer.value4,
-#                                     'address4': analyzer.address4,
-#                                     'value5': analyzer.value5,
-#                                     'address5': analyzer.address5,
-#                                     'value6': analyzer.value6,
-#                                     'address6': analyzer.address6,
-#                                     'value7': analyzer.value7,
-#                                     'address7': analyzer.address7,
-#                                     'value8': analyzer.value8,
-#                                     'address8': analyzer.address8,
-#                                     'value9': analyzer.value9,
-#                                     'address9': analyzer.address9,
-#                                     'value10': analyzer.value10,
-#                                     'address10': analyzer.address10,
-#                                     'value11': analyzer.value11,
-#                                     'address11': analyzer.address11,
-#                                     'value12': analyzer.value12,
-#                                     'address12': analyzer.address12,
-#                                     'value13': analyzer.value13,
-#                                     'address13': analyzer.address13,
-#                                     'value14': analyzer.value14,
-#                                     'address14': analyzer.address14,
-#                                     'value15': analyzer.value15,
-#                                     'address15': analyzer.address15,
-#                                     'value16': analyzer.value16,
-#                                     'address16': analyzer.address16,
-#                                     'value17': analyzer.value17,
-#                                     'address17': analyzer.address17,
-#                                     'value18': analyzer.value18,
-#                                     'address18': analyzer.address18,
-#                                     'value19': analyzer.value19,
-#                                     'address19': analyzer.address19,
-#                                     'value20': analyzer.value20,
-#                                     'address20': analyzer.address20
-#                                 }
-#                             })
-#                         elif analyzer.port == 'e2':
-#                             analyzers_by_port['e2'].append({
-#                                 'analyzer_id': analyzer.analyzer_id,
-#                                 'name': analyzer.name,
-#                                 'company_name': analyzer.company_name,
-#                                 'type': analyzer.type,
-#                                 'status': analyzer.status,
-#                                 'values': {
-#                                     'value1': analyzer.value1,
-#                                     'address1': analyzer.address1,
-#                                     'value2': analyzer.value2,
-#                                     'address2': analyzer.address2,
-#                                     'value3': analyzer.value3,
-#                                     'address3': analyzer.address3,
-#                                     'value4': analyzer.value4,
-#                                     'address4': analyzer.address4,
-#                                     'value5': analyzer.value5,
-#                                     'address5': analyzer.address5,
-#                                     'value6': analyzer.value6,
-#                                     'address6': analyzer.address6,
-#                                     'value7': analyzer.value7,
-#                                     'address7': analyzer.address7,
-#                                     'value8': analyzer.value8,
-#                                     'address8': analyzer.address8,
-#                                     'value9': analyzer.value9,
-#                                     'address9': analyzer.address9,
-#                                     'value10': analyzer.value10,
-#                                     'address10': analyzer.address10,
-#                                     'value11': analyzer.value11,
-#                                     'address11': analyzer.address11,
-#                                     'value12': analyzer.value12,
-#                                     'address12': analyzer.address12,
-#                                     'value13': analyzer.value13,
-#                                     'address13': analyzer.address13,
-#                                     'value14': analyzer.value14,
-#                                     'address14': analyzer.address14,
-#                                     'value15': analyzer.value15,
-#                                     'address15': analyzer.address15,
-#                                     'value16': analyzer.value16,
-#                                     'address16': analyzer.address16,
-#                                     'value17': analyzer.value17,
-#                                     'address17': analyzer.address17,
-#                                     'value18': analyzer.value18,
-#                                     'address18': analyzer.address18,
-#                                     'value19': analyzer.value19,
-#                                     'address19': analyzer.address19,
-#                                     'value20': analyzer.value20,
-#                                     'address20': analyzer.address20
-#                                 }
-#                             })
-                    
-#                     # Append the gateway and its analyzers by port
-#                     gateways_data.append({
-#                         'G_id': gateway.G_id,
-#                         'gateway_name': gateway.gateway_name,
-#                         'mac_address': gateway.mac_address,
-#                         'status': gateway.status,
-#                         'deploy_status': gateway.deploy_status,
-#                         'config': gateway.config,
-#                         'analyzers_by_port': analyzers_by_port
-#                     })
-
-#                 # Append project data
-#                 response_data.append({
-#                     'PM_id': project.PM_id,
-#                     'name': project.name,
-#                     'longitude': project.longitude,
-#                     'latitude': project.latitude,
-#                     'address': project.address,
-#                     'is_active': project.is_active,
-#                     'user': {
-#                         'user_id': project.user_id.user_id,
-#                         'firstname': project.user_id.firstname,
-#                         'lastname': project.user_id.lastname
-#                     },
-#                     'connected_gateways': gateways_data
-#                 })
-
-#             return JsonResponse({
-#                 'message': 'All projects retrieved successfully',
-#                 'projects': response_data
-#             })
-#         except Exception as e:
-#             return JsonResponse({'message': 'Error retrieving projects', 'error': str(e)})
 
 
 @csrf_exempt
@@ -1316,8 +1365,14 @@ def update_gateway(request):
             gateway.project_id = project_id
             gateway.deploy_status = deploy_status
             gateway.save()
+            
+            project = Project_Manager.objects.filter(PM_id = project_id).first()
+            if project:
+                has_deployed_gateway = Gateways.objects.filter(project_id=project_id,deploy_status="deployed").exists()
+                project.is_active = has_deployed_gateway
+                project.save()
 
-            return JsonResponse({'message': 'Gateway updated successfully'}, status=200)
+            return JsonResponse({'message': 'Gateway and project updated successfully'}, status=200)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'message': 'Invalid request method'}, status=405)
@@ -1684,9 +1739,6 @@ def fetch_ports(request):
     print(f"Invalid request method: {request.method}")
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-
-
-
 # fetch analyzer on he basis of specefic port
 def fetch_analyzers_by_port(request, port_id):
     try:
@@ -1793,10 +1845,6 @@ def fetch_analyzers_by_port(request, port_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
-                
-
-
-
 #for specefic user
 @csrf_exempt
 def Fetch_Projects(request):
@@ -1959,9 +2007,6 @@ def create_box(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"message": "Method not allowed"}, status=405)
-
-
-
 
 @csrf_exempt
 def get_boxes(request):
@@ -2490,31 +2535,29 @@ def get_analyzer_value_data(request, analyzer_id, value_name):
 def post_metadata(request):
     if request.method == "POST":
         try:
-            # Decode and parse the JSON payload
             data = json.loads(request.body.decode('utf-8'))
             print(data)
 
-            # Validate gateway
             gateway_name = data.get("gateway")
             if not gateway_name:
                 return JsonResponse({"error": "Gateway name is required"}, status=400)
 
-            # Fetch or create the gateway
-            gateway, _ = Gateways.objects.get_or_create(gateway_name=gateway_name)
+            total_power = data.get("total_power", 0)
+            setpoint1 = data.get("setpoint1", 0)
+            setpoint2 = data.get("setpoint2", 0)
+            total_grid = data.get("total_grid", 0)
+            total_Generator = data.get("total_Generator", 0)
+            total_solar = data.get("total_solar", 0)
 
-            # Track analyzers to retain
+            gateway, _ = Gateways.objects.get_or_create(gateway_name=gateway_name)
             valid_analyzers = []
 
-            # Process the ports
-            ports_data = data.get("ports", [])  # Add this line to fetch `ports_data` from the payload
+            ports_data = data.get("ports", [])  
             for port_analyzers in ports_data:
                 for analyzer_data in port_analyzers:
                     port_name = analyzer_data.get("port_name")
                     if port_name:
-                        # Normalize port_name
                         port_name = port_name.split('/')[-1].split('.')[0]
-                        # port_name = port_name.upper().replace("com", "COM_")  # Format to COM_1, COM_2, etc.
-
 
                     analyzer_name = analyzer_data.get("name")
                     analyzer_type = analyzer_data.get("type")
@@ -2524,7 +2567,6 @@ def post_metadata(request):
                     if not (port_name and analyzer_name and analyzer_type):
                         return JsonResponse({"error": "Port name, analyzer name, and type are required"}, status=400)
 
-                    # Fetch or update analyzer
                     analyzer, _ = Analyzer.objects.update_or_create(
                         name=analyzer_name,
                         gateway=gateway,
@@ -2537,27 +2579,38 @@ def post_metadata(request):
                     )
                     valid_analyzers.append(analyzer)
 
-                    # Always create a new metadata entry to store historical data
                     metadata = MetaData.objects.create(
                         gateway=gateway,
                         analyzer=analyzer,
                         mac_address=gateway.mac_address,
-                        MOD_id=f"{gateway_name}_{port_name}_{analyzer_name}_{uuid.uuid4().hex[:8]}"
+                        MOD_id=f"{gateway_name}_{port_name}_{analyzer_name}_{uuid.uuid4().hex[:8]}",
+                        total_power=total_power,  
+                        setpoint1=setpoint1,  
+                        setpoint2=setpoint2,
+                        total_grid=total_grid,
+                        total_Generator=total_Generator,
+                        total_solar=total_solar,
                     )
 
-                    # Save metadata values dynamically (max 20 values)
                     for i, value in enumerate(values, start=1):
-                        if i > 20:  # Limit to 20 values
+                        if i > 20:
                             break
                         setattr(metadata, f"value{i}_name", value.get("name"))
                         setattr(metadata, f"value{i}_address", value.get("address"))
                         setattr(metadata, f"value{i}_value", value.get("value"))
                     metadata.save()
 
-            # Remove obsolete analyzers (ensure analyzer_id is unique)
             Analyzer.objects.filter(gateway=gateway).exclude(analyzer_id__in=[a.analyzer_id for a in valid_analyzers]).delete()
 
-            return JsonResponse({"message": "Data successfully created or updated"}, status=201)
+            return JsonResponse({
+                "message": "Data successfully created or updated",
+                "total_power": total_power,
+                "setpoint1": setpoint1,
+                "setpoint2": setpoint2,
+                "total_grid": total_grid,
+                "total_Generator": total_Generator,
+                "total_solar": total_solar
+            }, status=201)
 
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON payload"}, status=400)
@@ -2565,7 +2618,6 @@ def post_metadata(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
-
 
 # Add debug logs
 def fetch_metadata(request):
@@ -2630,7 +2682,6 @@ def fetch_highchart_data(request):
                 from_date = timezone.make_aware(
                     datetime.strptime(from_date, "%Y-%m-%d"), timezone.get_current_timezone()
                 )
-                print("Timezone-aware from_date:", from_date)
 
             if to_date:
                 to_date = timezone.make_aware(
@@ -2639,7 +2690,6 @@ def fetch_highchart_data(request):
                     ),
                     timezone.get_current_timezone()
                 )
-                print("Timezone-aware to_date:", to_date)
 
             # Fetch the gateway
             try:
@@ -2662,7 +2712,6 @@ def fetch_highchart_data(request):
                 }
 
                 for analyzer in port_analyzers:
-                    # Fetch all metadata entries for the analyzer within the date range
                     metadata_entries = MetaData.objects.filter(analyzer=analyzer)
 
                     if from_date:
@@ -2673,26 +2722,28 @@ def fetch_highchart_data(request):
                     value_series = []
 
                     for metadata in metadata_entries:
-                        # Extract values dynamically by name
                         for i in range(1, 21):
                             name = getattr(metadata, f"value{i}_name", None)
                             value = getattr(metadata, f"value{i}_value", None)
                             if name == value_name:
-                                # Convert timestamp to milliseconds and append the value
                                 timestamp_ms = int(metadata.timestamp.timestamp() * 1000)
                                 value_series.append([timestamp_ms, value])
 
+                    # **Sort individual analyzer data**
+                    value_series.sort(key=lambda x: x[0])
+
                     if value_series:
-                        # Add analyzer data to the port's data series
                         port_data["data"].append({
                             "name": analyzer.name,
                             "data": value_series
                         })
 
+                # **Sort the analyzers inside port_data["data"] by their earliest timestamp**
+                port_data["data"].sort(key=lambda x: x["data"][0][0] if x["data"] else float("inf"))
+
                 if port_data["data"]:
                     highchart_data.append(port_data)
 
-            # Return Highcharts formatted data
             return JsonResponse({
                 "gateway": gateway_name,
                 "value_name": value_name,
@@ -2807,5 +2858,240 @@ def fetch_deployed_gateways_name_mac(request):
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 
+@csrf_exempt
+def get_power_data(request):
+    try:
+        gateway_id = request.GET.get('gateway_id')  # 👈 now expecting gateway_id
+
+        if not gateway_id:
+            return JsonResponse({"error": "Missing gateway_id in request"}, status=400)
+
+        metadata_list = MetaData.objects.filter(gateway_id=gateway_id).values(
+            'setpoint1', 'setpoint2', 'total_power' , 'total_grid', 'total_Generator', 'total_solar'
+        ).order_by('-MD_id')[:10]
+
+        if metadata_list.exists():
+            return JsonResponse({"data": list(metadata_list)}, safe=False)
+        else:
+            return JsonResponse({"error": "No data found for this gateway"}, status=404)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+    
+@csrf_exempt
+def total_admin(request):
+    if request.method == 'GET':
+        try:
+            # Count only users with role='user'
+            admin_count = User.objects.filter(role='admin').count()
+            return JsonResponse({'admin_users': admin_count}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'error': 'invalid method'}, status=405)
+
+@csrf_exempt
+def admin_detail(request):
+    if request.method == 'GET':
+        try:
+            admins = User.objects.filter(role='admin')
+
+            data = []
+            for admin in admins:
+                total_users = User.objects.filter(role='user').filter(hardware__in=admin.hardware.all()).distinct().count()
+                total_projects = Project.objects.filter(user_id=admin).count()
+                total_cr_ids = admincr.objects.filter(admin_id=admin.user_id).count()
+                total_projects = Project_Manager.objects.filter(user_id=admin.user_id).count()
+                data.append({
+                    'id': admin.user_id,
+                    'username': f"{admin.firstname} {admin.lastname}",
+                    'email': admin.email,
+                    'totalUsers': total_cr_ids,
+                    'totalProjects': total_projects
+                })
+
+            return JsonResponse(data, safe=False, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'error': 'Invalid method'}, status=405)
+
+@csrf_exempt
+def total_projecta(request):
+    try:
+        if request.method == 'GET':
+            # Simply count all projects
+            total_projects = Project_Manager.objects.count()
+            return JsonResponse({'total_project': total_projects}, status=200)
+
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+def total_project_user(request):
+    try:
+        if request.method == 'GET':
+            user_id = request.GET.get('user_id')  # Get user_id from query params
+
+            if user_id:
+                total_projects = Project_Manager.objects.filter(user_id=user_id).count()
+            else:
+                total_projects = Project_Manager.objects.count()
+
+            return JsonResponse({'total_project': total_projects}, status=200)
+
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
 
+@csrf_exempt
+def get_total_gateways_user(request):
+    if request.method == "GET":
+        try:
+            user_id = request.GET.get("user_id")
+            if not user_id:
+                return JsonResponse({"error": "user_id is required"}, status=400)
+            
+            # Clean user_id just in case
+            user_id = ''.join(filter(str.isdigit, user_id))
+
+            # Filter Gateways by user_id
+            total_gateways_count = Gateways.objects.filter(user_id=user_id).count()
+
+            return JsonResponse({
+                "message": "Gateways retrieved successfully",
+                "gateways_count": total_gateways_count
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({
+                "error": str(e)
+            }, status=400)
+
+    return JsonResponse({"error": "Invalid method"}, status=405)
+
+@csrf_exempt
+def admin_detail_superadmin(request):
+    if request.method == 'GET':
+        try:
+            admins = User.objects.filter(role='admin')
+
+            data = []
+            for admin in admins:
+                data.append({
+                    'id': admin.user_id,
+                    'username': f"{admin.firstname} {admin.lastname}",
+                    'email': admin.email,
+                    'contact': admin.contact,
+                    'address': admin.adress,  # ✅ fixed typo: 'adress' from model
+                    'zip_code': admin.zip_code,
+                })
+
+            return JsonResponse({'admins': data}, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'error': 'Invalid method'}, status=405)
+
+
+@csrf_exempt
+def create_admin(request):
+    if request.method == 'POST':
+        try:
+            # Parse request data
+            data = json.loads(request.body)
+            print('User Creation', data)
+
+            # Get the required fields
+            firstname = data.get('firstname')
+            lastname = data.get('lastname')
+            email = data.get('email')
+            password = data.get('password')
+            contact = data.get('contact')
+            role = data.get('role', 'admin')
+            is_online = data.get('is_online', False)
+            adress = data.get('adress')
+            zip_code = data.get('zip_code')
+            image_base64 = data.get('image')
+
+            # Check if all required fields are provided
+            if not all([firstname, lastname, email, contact, password, adress, zip_code]):
+                return JsonResponse({'error': 'All required fields must be provided.'}, status=400)
+
+            # Validate the role
+            if role not in dict(User.ROLES):
+                return JsonResponse({'error': 'Invalid role.'}, status=400)
+
+            # Handle image data
+            image_data = None
+            if image_base64:
+                try:
+                    if image_base64.startswith('data:image'):
+                        image_base64 = image_base64.split(',')[1]
+                    image_data = base64.b64decode(image_base64)
+                except (TypeError, ValueError):
+                    return JsonResponse({'error': 'Invalid image data.'}, status=400)
+
+            # Create the user
+            user = User(
+                firstname=firstname,
+                lastname=lastname,
+                email=email,
+                contact=contact,
+                password=password,
+                role=role,
+                adress=adress,
+                zip_code=zip_code,
+                image=image_data,
+                is_online=is_online
+            )
+            user.save()
+
+            # Return success response with user data
+            return JsonResponse({
+                'id': user.user_id,
+                'firstname': user.firstname,
+                'lastname': user.lastname,
+                'email': user.email,
+                'contact': user.contact,
+                'role': user.role,
+                'adress': user.adress,
+                'zip_code': user.zip_code,
+                'unique_key': user.unique_key,
+                'is_online': user.is_online,
+                'message': 'User created successfully.',
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON data.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
+
+
+@csrf_exempt
+def fetching_user(request):
+    user_id = request.GET.get('user_id')
+
+    if user_id:
+        try:
+            user = User.objects.values(
+                'user_id', 'firstname', 'lastname', 'email', 'contact', 
+                'role', 'adress', 'zip_code', 'is_online', 'image', 'password'
+            ).get(user_id=user_id)
+            return JsonResponse(user, safe=False)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'User not found'}, status=404)
+    else:
+        users = User.objects.values(
+            'user_id', 'firstname', 'lastname', 'email', 'contact', 
+            'role', 'adress', 'zip_code', 'is_online', 'image', 'password'
+        )
+        return JsonResponse(list(users), safe=False)
