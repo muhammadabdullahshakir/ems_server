@@ -1,6 +1,7 @@
 asgiref
 Django
 gunicorn
+requests
 django-cors-headers
 djangorestframework
 djangorestframework-simplejwt
