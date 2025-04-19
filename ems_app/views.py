@@ -2626,9 +2626,14 @@ def post_metadata(request):
             data = json.loads(request.body.decode('utf-8'))
             print(data)
 
-            gateway_name = data.get("gateway")
-            if not gateway_name:
-                return JsonResponse({"error": "Gateway name is required"}, status=400)
+            mac_address = data.get("mac_address")
+            if not mac_address:
+                return JsonResponse({"error": "MAC address is required"}, status=400)
+
+            try:
+                gateway = Gateways.objects.get(mac_address=mac_address)
+            except Gateways.DoesNotExist:
+                return JsonResponse({"error": "MAC address not matched with any gateway"}, status=404)
 
             total_power = data.get("total_power", 0)
             setpoint1 = data.get("setpoint1", 0)
@@ -2637,7 +2642,7 @@ def post_metadata(request):
             total_Generator = data.get("total_Generator", 0)
             total_solar = data.get("total_solar", 0)
 
-            gateway, _ = Gateways.objects.get_or_create(gateway_name=gateway_name)
+            
             valid_analyzers = []
 
             ports_data = data.get("ports", [])  
@@ -2671,7 +2676,7 @@ def post_metadata(request):
                         gateway=gateway,
                         analyzer=analyzer,
                         mac_address=gateway.mac_address,
-                        MOD_id=f"{gateway_name}_{port_name}_{analyzer_name}_{uuid.uuid4().hex[:8]}",
+                        MOD_id=f"{gateway.gateway_name}_{port_name}_{analyzer_name}_{uuid.uuid4().hex[:8]}",
                         total_power=total_power,  
                         setpoint1=setpoint1,  
                         setpoint2=setpoint2,
