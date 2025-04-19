@@ -22,7 +22,6 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 # from django.core.files.uploadedfile import InMemoryUploadedFile
 # from django.core.files.storage import default_storage
-import requests
 
 
 @csrf_exempt
@@ -215,6 +214,7 @@ def create_or_update_subscription(request):
             # Fetch all subscriptions and related user data
             subscriptions = Subscription.objects.select_related('user_id').all()
             subscription_data = []
+            print('user Creation',subscription_data)
 
             for sub in subscriptions:
                 user = sub.user_id
@@ -258,7 +258,6 @@ def create_or_update_subscription(request):
             stop_days = data.get('stop_days', 30)
             price = data.get('price', 0)
             discount = data.get('discount', 0)
-            status = data.get('status')
 
 
             warn_days = int(warn_days)
@@ -285,7 +284,6 @@ def create_or_update_subscription(request):
                     'price': price,
                     'discount': discount,
                     'Active_date': active_date,
-                    'status': status,
                 }
             )
 
@@ -325,14 +323,17 @@ def create_or_update_subscription(request):
 
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
+
+# views.py
 @csrf_exempt
 def create_user(request, users_id):
     if request.method == 'POST':
         try:
             # Parse request data
             data = json.loads(request.body)
-            print('user Creation',data)
-            hardware_ids = data.get('hardware', [])
+            print('user Creation', data)
+
+            # Extract fields from request data
             firstname = data.get('firstname')
             lastname = data.get('lastname')
             email = data.get('email')
@@ -344,70 +345,41 @@ def create_user(request, users_id):
             zip_code = data.get('zip_code')
             image_base64 = data.get('image')
 
-        
             if not all([firstname, lastname, email, contact, password, adress, zip_code]):
                 return JsonResponse({'error': 'All required fields must be provided.'}, status=400)
 
-            
             if role not in dict(User.ROLES):
                 return JsonResponse({'error': 'Invalid role.'}, status=400)
 
-            
-            image_data = None
-            if image_base64:
-                try:
-                    if image_base64.startswith('data:image'):
-                        image_base64 = image_base64.split(',')[1]
-                    image_data = base64.b64decode(image_base64)
-                except (TypeError, ValueError):
-                    return JsonResponse({'error': 'Invalid image data.'}, status=400)
-
-        
+            # Create user object
             user = User(
                 firstname=firstname,
                 lastname=lastname,
                 email=email,
                 contact=contact,
-                password=password,  
+                password=password,
                 role=role,
                 adress=adress,
                 zip_code=zip_code,
-                image=image_data,  
-                is_online=is_online
+                image=image_base64,
+                is_online=is_online,
+                created_by_id=users_id  # Setting the current admin as the creator
             )
             user.save()
 
-        
+            # Assign hardware if provided
+            hardware_ids = data.get('hardware', [])
             if hardware_ids:
-                try:
-                    if not isinstance(hardware_ids, list):
-                        hardware_ids = [hardware_ids]
-
-                    hardware_list = Hardware.objects.filter(hardware_id__in=hardware_ids)
-                    if not hardware_list.exists():
-                        return JsonResponse({'error': 'No valid hardware found.'}, status=404)
-
+                hardware_list = Hardware.objects.filter(hardware_id__in=hardware_ids)
+                if hardware_list.exists():
                     user.hardware.add(*hardware_list)
-                except Hardware.DoesNotExist:
-                    return JsonResponse({'error': 'Hardware not found.'}, status=404)
+                else:
+                    return JsonResponse({'error': 'No valid hardware found.'}, status=404)
 
-            user.save()
-                        # Create Invoice
-            print(users_id)
-            admincr_obj = admincr(
-            cr_id=user.user_id,
-            admin_id=users_id
-            )
+            # Create Invoice and other operations...
+            admincr_obj = admincr(cr_id=user.user_id, admin_id=users_id)
             admincr_obj.save()
 
-            sub_request = HttpRequest()
-            sub_request.method = 'POST'
-            sub_request._body = json.dumps({
-                'user_id': user.user_id,
-
-            }).encode('utf-8')
-            sub_request.META['CONTENT_TYPE'] = 'application/json'
-            sub_response = create_or_update_subscription(sub_request)
             return JsonResponse({
                 'id': user.user_id,
                 'firstname': user.firstname,
@@ -428,6 +400,50 @@ def create_user(request, users_id):
             return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
 
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
+
+#for login user
+@csrf_exempt
+def login_user(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            email = data.get('email')
+            password = data.get('password')
+            
+            try:
+                user = User.objects.get(email=email)
+                
+                if user.password == password:
+                    user.is_online = True
+                    user.save()
+                    refresh = RefreshToken.for_user(user)
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Login successful',
+                        'user_id': user.user_id,
+                        'firstname': user.firstname,
+                        'lastname': user.lastname,
+                        'role': user.role,
+                        'image': user.image,
+                        'unique_key' : str(user.unique_key),
+                        'access': access_token,
+                        'refresh': refresh_token,
+                        'is_online' : user.is_online
+                    }, status=200)
+                    
+                else:
+                    return JsonResponse({'success': False, 'message': 'Invalid username or password'}, status=401)
+            
+            except User.DoesNotExist:
+                return JsonResponse({'success': False, 'message': 'User Not Found'}, status=404)
+        
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'message': 'Invalid data'}, status=400)
+    
+    return JsonResponse({'success': False, 'message': 'Invalid method'}, status=405)
 
 
 #for login user
@@ -810,10 +826,21 @@ def user_project(request):
 #getting the whole user
 @csrf_exempt
 def fetching_users(request):
-    users = User.objects.all().values('user_id' , 'firstname' , 'lastname' , 'email','contact', 'role', 'adress','zip_code' , 'is_online','image','password')
-    
+    user_id = request.GET.get('user_id')  # get user_id from query param
+
+    if user_id:
+        users = User.objects.filter(user_id=user_id).values(
+            'user_id', 'firstname', 'lastname', 'email', 'contact',
+            'role', 'adress', 'zip_code', 'is_online', 'image', 'password', 'created_by_id'
+        )
+    else:
+        users = User.objects.all().values(
+            'user_id', 'firstname', 'lastname', 'email', 'contact',
+            'role', 'adress', 'zip_code', 'is_online', 'image', 'password', 'created_by_id'
+        )
+
     user_list = list(users)
-    return JsonResponse(user_list , safe=False)
+    return JsonResponse(user_list, safe=False)
 
 
 #for deleting user
@@ -1065,6 +1092,21 @@ def Get_Project_Manager(request, user_id):
     
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
+@csrf_exempt
+def Get_User_Project_Count(request, user_id):
+    if request.method == 'GET':
+        try:
+            project_count = Project_Manager.objects.filter(user_id=user_id).count()
+
+            return JsonResponse({
+                'user_id': user_id,
+                'project_count': project_count
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 @csrf_exempt
 def Get_All_Projects(request):
@@ -1102,6 +1144,9 @@ def Get_All_Projects(request):
                     'user_id': project_manager.user_id.user_id if project_manager.user_id else None,
                     'user_firstname': project_manager.user_id.firstname if project_manager.user_id else None,
                     'user_lastname': project_manager.user_id.lastname if project_manager.user_id else None,
+                    'created_by_id': project_manager.user_id.created_by.user_id if project_manager.user_id and project_manager.user_id.created_by else None,
+
+                    'user_image': project_manager.user_id.image if project_manager.user_id else None,
                     'name': project_manager.name,
                     'longitude': str(project_manager.longitude),
                     'latitude': str(project_manager.latitude),
@@ -1118,6 +1163,23 @@ def Get_All_Projects(request):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+@csrf_exempt
+def Get_superAdmin_Project_Count(request):
+    if request.method == 'GET':
+        try:
+            # Count all projects
+            total_projects = Project_Manager.objects.count()
+            return JsonResponse({
+                'total_projects': total_projects
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 # create gateway by project manager
@@ -1476,6 +1538,32 @@ def fetch_gateways_of_usersList(request):
 
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
+@csrf_exempt
+def get_deployed_gateway_count(request):
+    if request.method == "GET":
+        try:
+            user_id = request.GET.get('user_id')
+            print('user_id:', user_id)
+
+            if not user_id:
+                return JsonResponse({'message': 'User ID is required'}, status=400)
+
+            user = User.objects.filter(user_id=user_id).first()
+            if not user:
+                return JsonResponse({'message': 'User not found'}, status=404)
+
+            deployed_count = Gateways.objects.filter(user_id=user_id, deploy_status="deployed").count()
+
+            return JsonResponse({
+                'user_id': user_id,
+                'deployed_gateway_count': deployed_count
+            }, status=200)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 
 # getting total gateways
@@ -2899,7 +2987,7 @@ def admin_detail(request):
             data = []
             for admin in admins:
                 total_users = User.objects.filter(role='user').filter(hardware__in=admin.hardware.all()).distinct().count()
-                total_projects = Project.objects.filter(user_id=admin).count()
+
                 total_cr_ids = admincr.objects.filter(admin_id=admin.user_id).count()
                 total_projects = Project_Manager.objects.filter(user_id=admin.user_id).count()
                 data.append({
@@ -2985,9 +3073,11 @@ def admin_detail_superadmin(request):
             for admin in admins:
                 data.append({
                     'id': admin.user_id,
-                    'username': f"{admin.firstname} {admin.lastname}",
+                    'firstname': admin.firstname, 
+                    'lastname': admin.lastname,
                     'email': admin.email,
                     'contact': admin.contact,
+                    'image': admin.image,
                     'address': admin.adress,  # ✅ fixed typo: 'adress' from model
                     'zip_code': admin.zip_code,
                 })
@@ -3029,14 +3119,14 @@ def create_admin(request):
                 return JsonResponse({'error': 'Invalid role.'}, status=400)
 
             # Handle image data
-            image_data = None
-            if image_base64:
-                try:
-                    if image_base64.startswith('data:image'):
-                        image_base64 = image_base64.split(',')[1]
-                    image_data = base64.b64decode(image_base64)
-                except (TypeError, ValueError):
-                    return JsonResponse({'error': 'Invalid image data.'}, status=400)
+            # image_data = None
+            # if image_base64:
+            #     try:
+            #         if image_base64.startswith('data:image'):
+            #             image_base64 = image_base64.split(',')[1]
+            #         image_data = base64.b64decode(image_base64)
+            #     except (TypeError, ValueError):
+            #         return JsonResponse({'error': 'Invalid image data.'}, status=400)
 
             # Create the user
             user = User(

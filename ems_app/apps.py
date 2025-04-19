@@ -15,7 +15,7 @@ class PrintDjangoThread(threading.Thread):
     def run(self):
         from ems_app.models import Subscription, InvoiceTable  # Import inside to ensure apps are ready
         while self.running:
-            #print("Checking invoice statuses...")
+            print("Checking invoice statuses...")
             active_subs = Subscription.objects.filter(status="Active", deactive__isnull=True)
             for sub in active_subs:
                 # Get latest invoice for this subscription (if multiple exist)

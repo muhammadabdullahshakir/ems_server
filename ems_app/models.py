@@ -4,6 +4,7 @@ import uuid
 import threading
 from datetime import timedelta  
 
+# models.py
 class User(models.Model):
     ROLES = (
         ('admin', 'Admin'),
@@ -17,12 +18,13 @@ class User(models.Model):
     contact = models.CharField(max_length=20)
     password = models.CharField(max_length=128)
     role = models.CharField(max_length=20, choices=ROLES, default='user')
-    image = models.TextField(blank=True , null=True)
+    image = models.CharField(blank=True, null=True)
     adress = models.CharField(max_length=500)
     is_online = models.BooleanField(default=False)
     zip_code = models.CharField(max_length=10)
-    unique_key = models.UUIDField(default=uuid.uuid4, editable=False , unique=True)
+    unique_key = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     hardware = models.ManyToManyField('Hardware', blank=True)
+    created_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='created_users')
 
     def __str__(self):
         return self.firstname
@@ -107,12 +109,17 @@ class Data(models.Model):
     
 class Project_Manager(models.Model):
     PM_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User ,on_delete=models.CASCADE)
+    user_id = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
-    longitude = models.DecimalField(max_digits=100 , decimal_places=10)
-    latitude = models.DecimalField(max_digits=100 , decimal_places=10)
+    longitude = models.DecimalField(max_digits=100, decimal_places=10)
+    latitude = models.DecimalField(max_digits=100, decimal_places=10)
     address = models.CharField(max_length=300)
     is_active = models.BooleanField(default=False)
+
+
+    def __str__(self):
+        return self.name
+
     
     
 class Box(models.Model):
@@ -220,7 +227,7 @@ class Subscription(models.Model):
 class InvoiceTable(models.Model):
     inv_id = models.AutoField(primary_key=True)
     subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE)
-    start_date = models.DateTimeField()
+    start_date = models.DateField()
     end_date = models.DateField()
     billing_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[
