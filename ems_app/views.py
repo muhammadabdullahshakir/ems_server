@@ -363,7 +363,8 @@ def create_user(request, users_id):
                 zip_code=zip_code,
                 image=image_base64,
                 is_online=is_online,
-                created_by_id=users_id  # Setting the current admin as the creator
+                created_by_id = data.get('created_by_id')
+  # Setting the current admin as the creator
             )
             user.save()
 
@@ -938,13 +939,14 @@ def update_hardware(request , hardware_id):
 def delete_hardware(request , hardware_id):
     if request.method == 'POST':
         try:
-            hardware = get_object_or_404(Hardware , hardware_id=hardware_id)
-            hardware.delete()
-            return JsonResponse({'Message' : 'Hardware deleted successfully'}, status=200)
+            # Find the gateway using its primary key (G_id)
+            gateway = get_object_or_404(Gateways, G_id=hardware_id)
+            gateway.delete()
+            return JsonResponse({'message': 'Gateway deleted successfully'}, status=200)
         except Exception as e:
-            return JsonResponse({'error' : str(e)}, status=405)
+            return JsonResponse({'error': str(e)}, status=500)
     else:
-        return JsonResponse({'error' : 'invalid Http method'}, status=500)
+        return JsonResponse({'error': 'Invalid HTTP method'}, status=405)
     
     
 #multiple user delete API
@@ -1187,17 +1189,16 @@ def Get_superAdmin_Project_Count(request):
 def create_Gateways(request):
     if request.method == 'POST':
         try:
-            # Parse incoming data
             data = json.loads(request.body)
-            print('data:',data)
-            
-            # Extract the required fields from the incoming request
+            print('data:', data)
+
             gateway_name = data.get('gateway_name')
             mac_address = data.get('mac_address')
-            status = data.get('status', False)  # Default status is False if not provided
-            deploy_status = data.get('deploy_status', 'warehouse')  # Default deploy_status is 'warehouse'
-            config = data.get('config', False)  # Default config is False if not provided
-            # j_object = data.get('j_object', {})  # Default empty JSON if not provided
+            status = data.get('status', False)
+            deploy_status = data.get('deploy_status', 'warehouse')
+            config = data.get('config', False)
+            created_by_id = data.get('created_by_id')  # ✅ Get from request
+
             analyzers_by_port = {
                 'com1': [],
                 'com2': [],
@@ -1205,27 +1206,22 @@ def create_Gateways(request):
                 'e2': []
             }
 
-
-            # Create a new Gateway instance with user_id as None initially
             gateway = Gateways.objects.create(
                 gateway_name=gateway_name,
                 mac_address=mac_address,
                 status=status,
                 deploy_status=deploy_status,
                 config=config,
-                analyzers_by_port=analyzers_by_port,  # Store the fixed ports with empty lists
-
-                # j_object=j_object,
-                user_id=None  # user_id is not assigned at creation
+                analyzers_by_port=analyzers_by_port,
+                user_id=None,
+                created_by_id=created_by_id  # ✅ Important!
             )
-            
 
-            # Return success response with Gateway ID
             return JsonResponse({
                 'message': 'Gateway created successfully',
                 "Gateway Id": gateway.G_id,
-                "analyzers_by_port": analyzers_by_port  # Include the initialized analyzers_by_port in the response
-
+                "analyzers_by_port": analyzers_by_port,
+                "created_by_id": created_by_id,
             }, status=200)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
@@ -1308,6 +1304,8 @@ def get_unassigned_gateways(request):
                     'status': gateway.status,
                     'deploy_status': gateway.deploy_status,
                     'config': gateway.config,
+                    'created_by_id': gateway.created_by_id
+                    
                 }
                 for gateway in unassigned_gateways
             ]
@@ -1589,6 +1587,7 @@ def get_all_gateways(request):
                     'status': gateway.status,
                     'deploy_status': gateway.deploy_status,  # Should reflect 'user_aloted' if assigned
                     'config': gateway.config,
+                    'created_by_id': gateway.created_by_id
                 }
                 for gateway in gateways
             ]

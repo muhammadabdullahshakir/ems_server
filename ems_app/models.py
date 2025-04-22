@@ -18,7 +18,7 @@ class User(models.Model):
     contact = models.CharField(max_length=20)
     password = models.CharField(max_length=128)
     role = models.CharField(max_length=20, choices=ROLES, default='user')
-    image = models.CharField(blank=True, null=True)
+    image = models.CharField(blank=True, null=True, max_length=500)
     adress = models.CharField(max_length=500)
     is_online = models.BooleanField(default=False)
     zip_code = models.CharField(max_length=10)
@@ -93,7 +93,7 @@ class Gateways(models.Model):
     )
     analyzers_by_port = models.JSONField(default=dict)  # This will store your 'com1', 'com2', 'e1', 'e2' structure
     analyzers = models.ManyToManyField('Analyzer', related_name='gateways')
-
+    created_by_id = models.CharField(max_length=100, unique=False, null=True, blank=True)
 
 
     
