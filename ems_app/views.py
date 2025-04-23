@@ -8,6 +8,8 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from .models import E1, E2, Com1, Com2, User , Project ,Hardware , User_Project , Project_Manager,Box, Device, Gateway,Gateways,Analyzer,Com1 , Com2 , E1 ,E2,MetaData, admincr, superadmincr, InvoiceTable
 import json
+from collections import defaultdict
+
 from django.utils import timezone
 from datetime import datetime,timedelta
 from datetime import timedelta  
@@ -322,6 +324,71 @@ def create_or_update_subscription(request):
             return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
 
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
+
+
+@csrf_exempt
+def fetch_single_highchart_data(request):
+    if request.method == "GET":
+        try:
+            # Get query parameters
+            gateway_name = request.GET.get("gateway")
+            value_name = request.GET.get("value_name")
+            from_date = request.GET.get("from_date")
+            if not gateway_name or not value_name:
+                return JsonResponse({"error": "Gateway name and value name are required"}, status=400)
+            # Convert the date string to a timezone-aware datetime object
+            if from_date:
+                from_date = timezone.make_aware(
+                    datetime.strptime(from_date, "%Y-%m-%d"), timezone.get_current_timezone()
+                )
+            # Fetch the gateway
+            try:
+                gateway = Gateways.objects.get(gateway_name=gateway_name)
+            except Gateways.DoesNotExist:
+                return JsonResponse({"error": "Gateway not found"}, status=404)
+            # Fetch analyzers for the gateway
+            analyzers = Analyzer.objects.filter(gateway=gateway)
+            if not analyzers.exists():
+                return JsonResponse({"error": "No analyzers found for the gateway"}, status=404)
+            # Prepare Highcharts data
+            highchart_data = []
+            for port_name in ["COM_1", "COM_2", "e1", "e2"]:
+                port_analyzers = analyzers.filter(port=port_name)
+                port_data = {
+                    "name": port_name,
+                    "data": []
+                }
+                for analyzer in port_analyzers:
+                    metadata_entries = MetaData.objects.filter(analyzer=analyzer)
+                    if from_date:
+                        metadata_entries = metadata_entries.filter(timestamp__gte=from_date)
+                    value_series = []
+                    for metadata in metadata_entries:
+                        for i in range(1, 21):
+                            name = getattr(metadata, f"value{i}_name", None)
+                            value = getattr(metadata, f"value{i}_value", None)
+                            if name == value_name:
+                                timestamp_str = metadata.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                                value_series.append([timestamp_str, value])
+                    # Sort analyzer data
+                    value_series.sort(key=lambda x: x[0])
+                    if value_series:
+                        port_data["data"].append({
+                            "name": analyzer.name,
+                            "data": value_series
+                        })
+                # Sort analyzers by earliest timestamp
+                port_data["data"].sort(key=lambda x: x["data"][0][0] if x["data"] else float("inf"))
+                if port_data["data"]:
+                    highchart_data.append(port_data)
+            return JsonResponse({
+                "gateway": gateway_name,
+                "value_name": value_name,
+                "ports": highchart_data
+            }, status=200)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
 # views.py
@@ -2765,16 +2832,13 @@ def fetch_highchart_data(request):
             value_name = request.GET.get("value_name")
             from_date = request.GET.get("from_date")
             to_date = request.GET.get("to_date")
-            
             if not gateway_name or not value_name:
                 return JsonResponse({"error": "Gateway name and value name are required"}, status=400)
-
             # Convert the date strings to timezone-aware datetime objects
             if from_date:
                 from_date = timezone.make_aware(
                     datetime.strptime(from_date, "%Y-%m-%d"), timezone.get_current_timezone()
                 )
-
             if to_date:
                 to_date = timezone.make_aware(
                     datetime.combine(
@@ -2782,18 +2846,15 @@ def fetch_highchart_data(request):
                     ),
                     timezone.get_current_timezone()
                 )
-
             # Fetch the gateway
             try:
                 gateway = Gateways.objects.get(gateway_name=gateway_name)
             except Gateways.DoesNotExist:
                 return JsonResponse({"error": "Gateway not found"}, status=404)
-
             # Fetch analyzers for the gateway
             analyzers = Analyzer.objects.filter(gateway=gateway)
             if not analyzers.exists():
                 return JsonResponse({"error": "No analyzers found for the gateway"}, status=404)
-
             # Prepare Highcharts data
             highchart_data = []
             for port_name in ["COM_1", "COM_2", "e1", "e2"]:
@@ -2802,51 +2863,40 @@ def fetch_highchart_data(request):
                     "name": port_name,
                     "data": []
                 }
-
                 for analyzer in port_analyzers:
                     metadata_entries = MetaData.objects.filter(analyzer=analyzer)
-
                     if from_date:
                         metadata_entries = metadata_entries.filter(timestamp__gte=from_date)
                     if to_date:
                         metadata_entries = metadata_entries.filter(timestamp__lte=to_date)
-
                     value_series = []
-
+                    value_dict = defaultdict(float)
                     for metadata in metadata_entries:
                         for i in range(1, 21):
                             name = getattr(metadata, f"value{i}_name", None)
                             value = getattr(metadata, f"value{i}_value", None)
-                            if name == value_name:
-                                timestamp_ms = int(metadata.timestamp.timestamp() * 1000)
-                                value_series.append([timestamp_ms, value])
-
-                    # **Sort individual analyzer data**
-                    value_series.sort(key=lambda x: x[0])
-
+                            if name == value_name and isinstance(value, (int, float)):
+                                timestamp_str = metadata.timestamp.strftime("%Y-%m-%d")
+                                value_dict[timestamp_str] += value
+                    # Convert the dictionary to a sorted list
+                    value_series = sorted(value_dict.items())
                     if value_series:
                         port_data["data"].append({
                             "name": analyzer.name,
                             "data": value_series
                         })
-
                 # **Sort the analyzers inside port_data["data"] by their earliest timestamp**
                 port_data["data"].sort(key=lambda x: x["data"][0][0] if x["data"] else float("inf"))
-
                 if port_data["data"]:
                     highchart_data.append(port_data)
-
             return JsonResponse({
                 "gateway": gateway_name,
                 "value_name": value_name,
                 "ports": highchart_data
             }, status=200)
-
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
-
     return JsonResponse({"error": "Invalid request method"}, status=405)
-
 # get the values to show in animation
 @csrf_exempt
 def analyzer_values(request, gateway_name):
