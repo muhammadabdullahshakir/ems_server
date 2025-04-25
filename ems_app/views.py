@@ -1646,26 +1646,36 @@ def get_all_gateways(request):
                 return JsonResponse({'message': 'No gateways found'}, status=404)
 
             # Construct the response data
-            gateways_data = [
-                {
+            gateways_data = []
+            for gateway in gateways:
+                created_by_user = User.objects.filter(user_id=gateway.created_by_id).first()  # Get the user by created_by_id
+                admin_image = created_by_user.image if created_by_user else None  # Get the image if the user exists
+
+                gateways_data.append({
                     'G_id': gateway.G_id,
                     'gateway_name': gateway.gateway_name,
                     'mac_address': gateway.mac_address,
                     'status': gateway.status,
                     'deploy_status': gateway.deploy_status,  # Should reflect 'user_aloted' if assigned
                     'config': gateway.config,
-                    'created_by_id': gateway.created_by_id
-                }
-                for gateway in gateways
-            ]
+                    'created_by_id': gateway.created_by_id,
+                    'user_id': gateway.user_id.user_id if gateway.user_id else None,
+                    'user_image': gateway.user_id.image if gateway.user_id else None,
+                    'admin_image': admin_image  # Return the image URL of the user
+                })
             
             return JsonResponse({'Gateways': gateways_data}, status=200)
+
         except Exception as e:
             print(f"Error occurred: {str(e)}")  # Debugging: Print the error
             return JsonResponse({'error': str(e)}, status=400)
     
     print(f"Invalid request method: {request.method}")  # Debugging: Check the request method
     return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+
+
 
 def analyzer_data(analyzer):
     return {
@@ -2757,6 +2767,7 @@ def post_metadata(request):
                         setattr(metadata, f"value{i}_name", value.get("name"))
                         setattr(metadata, f"value{i}_address", value.get("address"))
                         setattr(metadata, f"value{i}_value", value.get("value"))
+                        setattr(metadata, f"value{i}_unit", value.get("unit"))
                     metadata.save()
 
             Analyzer.objects.filter(gateway=gateway).exclude(analyzer_id__in=[a.analyzer_id for a in valid_analyzers]).delete()
@@ -2870,20 +2881,25 @@ def fetch_highchart_data(request):
                     if to_date:
                         metadata_entries = metadata_entries.filter(timestamp__lte=to_date)
                     value_series = []
+                    unit = None
                     value_dict = defaultdict(float)
                     for metadata in metadata_entries:
                         for i in range(1, 21):
                             name = getattr(metadata, f"value{i}_name", None)
                             value = getattr(metadata, f"value{i}_value", None)
+                            current_unit = getattr(metadata, f"value{i}_unit", None)
                             if name == value_name and isinstance(value, (int, float)):
                                 timestamp_str = metadata.timestamp.strftime("%Y-%m-%d")
                                 value_dict[timestamp_str] += value
+                            if not unit:
+                                unit = current_unit
                     # Convert the dictionary to a sorted list
                     value_series = sorted(value_dict.items())
                     if value_series:
                         port_data["data"].append({
                             "name": analyzer.name,
-                            "data": value_series
+                            "data": value_series,
+                            "unit": unit
                         })
                 # **Sort the analyzers inside port_data["data"] by their earliest timestamp**
                 port_data["data"].sort(key=lambda x: x["data"][0][0] if x["data"] else float("inf"))
@@ -2897,7 +2913,9 @@ def fetch_highchart_data(request):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Invalid request method"}, status=405)
-# get the values to show in animation
+
+
+
 @csrf_exempt
 def analyzer_values(request, gateway_name):
     if request.method == "GET":

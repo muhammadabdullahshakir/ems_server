@@ -198,6 +198,7 @@ class MetaData(models.Model):
         exec(f'value{i}_name = models.CharField(max_length=100, blank=True, null=True)')
         exec(f'value{i}_address = models.CharField(max_length=200, blank=True, null=True)')
         exec(f'value{i}_value = models.FloatField(blank=True, null=True)')
+        exec(f'value{i}_unit = models.CharField(max_length=200, blank=True, null=True)')
     created_at = models.DateTimeField(auto_now_add=True)
     total_power = models.FloatField(default=0.0)
     setpoint1 = models.FloatField(default=0.0)
