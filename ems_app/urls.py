@@ -7,7 +7,7 @@ from .views import create_user , create_project , login_user , get_user_data , t
 from .views import user_project ,fetching_users , delete_user ,update_user , fetch_Hardware , update_hardware , delete_hardware , delete_selected_user, delete_selected_hardware , Create_Project_Manager ,Fetch_Projects,total_hardware_count,total_connected_hardware,total_project,fetches_total_hardware
 from .views import active_project , fetch_assigned_hardware, fetch_all_projects,logout_user, create_box , get_boxes,create_Gateways , fetch_gateway , fetch_value_data,fetch_device_data,fetch_whole_device_data,fetch_all_gateways,create_gateway,get_analyzers_by_gateway,create_analyzer,Get_Project_Manager,create_ports,fetch_ports,fetch_analyzers_by_port,get_all_gateways
 from .views import Get_All_Projects , get_unassigned_gateways,assign_gateways_to_user,fetch_gateways_of_user,fetch_gateways_of_usersList,assign_gateway_to_project,get_gateways_for_project,update_gateway,fetch_deployed_gateways_of_user,create_metadata,get_metadata,get_analyzer_value_data,get_total_gateways,get_deployed_gateways,get_user_aloted_gateways,post_metadata, fetch_metadata,fetch_highchart_data,analyzer_values,fetch_deployed_gateways_name_mac
-from .views import get_power_data, invoice_api, total_projecta, get_deployed_gateway_count, Get_superAdmin_Project_Count,fetch_single_highchart_data
+from .views import get_power_data, invoice_api, total_projecta, get_deployed_gateway_count, Get_superAdmin_Project_Count,fetch_single_highchart_data, edit_project_manager
 from .views import total_admin, admin_detail, total_project_user, get_total_gateways_user, admin_detail_superadmin, create_or_update_subscription, create_admin, create_admincr, create_superadmincr, fetching_user, Get_User_Project_Count
 
 urlpatterns = [
@@ -93,6 +93,7 @@ urlpatterns = [
     path('get_deployed_gateway_count/', get_deployed_gateway_count, name='get_deployed_gateway_count'),
     path('Get_superAdmin_Project_Count/', Get_superAdmin_Project_Count, name='Get_superAdmin_Project_Count'),
     path('fetch_single_highchart_data/', fetch_single_highchart_data, name='fetch_single_highchart_data'),
+    path('edit_project_manager/<int:pm_id>/', edit_project_manager, name='edit_project_manager'),
 
 
 
