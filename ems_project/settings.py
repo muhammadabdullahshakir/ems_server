@@ -135,7 +135,7 @@ DATABASES = {
         'NAME': 'emsdb1',          
         'USER': 'misbah',            
         'PASSWORD': '?5@1D9:lA_ex6p(%',     
-        'HOST': '34.60.166.10',           
+        'HOST': '10.53.144.3',           
         'PORT': '3306',
     }
 }
