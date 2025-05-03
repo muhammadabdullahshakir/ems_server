@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
+from google.cloud.sql.connector import Connector
+import sqlalchemy
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -129,16 +131,16 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 # }
 
 #for cloud
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'emsdb1',          
-        'USER': 'misbah',            
-        'PASSWORD': '?5@1D9:lA_ex6p(%',     
-        'HOST': '10.53.144.3',           
-        'PORT': '3306',
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'emsdb1',          
+#         'USER': 'misbah',            
+#         'PASSWORD': '?5@1D9:lA_ex6p(%',     
+#         'HOST': '10.53.144.3',           
+#         'PORT': '3306',
+#     }
+# }
 
 
 
@@ -172,6 +174,40 @@ DATABASES = {
 #         "NAME": BASE_DIR / "db.sqlite3",
 #     }
 # }
+
+# Get environment variables (these should be set in Cloud Run)
+INSTANCE_CONNECTION_NAME = "myprojectems-435411:us-central1:emsdb"  # Format: project:region:instance
+DB_USER = "misbah"
+DB_PASS = "?5@1D9:lA_ex6p(%"
+DB_NAME = "emsdb1"
+
+# Initialize connector
+connector = Connector()
+
+# Define the connection function
+def getconn():
+    conn = connector.connect(
+        INSTANCE_CONNECTION_NAME,
+        "pymysql",
+        user=DB_USER,
+        password=DB_PASS,
+        db=DB_NAME
+    )
+    return conn
+
+# Django DB configuration
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASS,
+        'OPTIONS': {
+            'creator': getconn,
+        }
+    }
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
