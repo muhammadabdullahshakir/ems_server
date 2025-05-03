@@ -195,16 +195,17 @@ def getconn():
     )
     return conn
 
-# Django DB configuration
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': DB_NAME,
         'USER': DB_USER,
         'PASSWORD': DB_PASS,
+        'HOST': f'/cloudsql/{INSTANCE_CONNECTION_NAME}',  # This tells Django to connect via UNIX socket
+        'PORT': '3306',
         'OPTIONS': {
-            'creator': getconn,
-        }
+            'charset': 'utf8mb4',
+        },
     }
 }
 
