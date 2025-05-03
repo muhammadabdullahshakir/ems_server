@@ -10,6 +10,6 @@ psycopg2-binary
 gunicorn
 requests
 python-dotenv
-cloud-sql-python-connector["pymysql"] 
 SQLAlchemy==2.0.7
 pymysql
+google-cloud-sql-connector
