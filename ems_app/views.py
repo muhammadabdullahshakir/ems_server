@@ -9,6 +9,8 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import E1, E2, Com1, Com2, User , Project ,Hardware , User_Project , Project_Manager,Box, Device, Gateway,Gateways,Analyzer,Com1 , Com2 , E1 ,E2,MetaData, admincr, superadmincr, InvoiceTable
 import json
 from collections import defaultdict
+from rest_framework import permissions
+
 
 from django.utils import timezone
 from datetime import datetime,timedelta
@@ -19,6 +21,8 @@ from django.http import JsonResponse, HttpRequest
 import logging
 import base64
 from django.views import View
+from rest_framework.decorators import api_view,  permission_classes
+
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -26,7 +30,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 # from django.core.files.storage import default_storage
 
 
-@csrf_exempt
+
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_admincr(request):
     if request.method == 'POST':
         try:
@@ -83,7 +91,8 @@ def create_admincr(request):
 
     return JsonResponse({'error': 'Invalid HTTP method. Use POST.'}, status=405)
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_superadmincr(request):
     if request.method == 'POST':
         try:
@@ -140,7 +149,8 @@ def create_superadmincr(request):
 
     return JsonResponse({'error': 'Invalid HTTP method. Use POST.'}, status=405)
 
-@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.AllowAny])
 def invoice_api(request):
     if request.method == 'GET':
         inv_id = request.GET.get('inv_id')
@@ -209,7 +219,8 @@ def invoice_api(request):
     else:
         return JsonResponse({'error': 'Unsupported HTTP method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.AllowAny])
 def create_or_update_subscription(request):
     if request.method == 'GET':
         try:
@@ -326,7 +337,8 @@ def create_or_update_subscription(request):
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_single_highchart_data(request):
     if request.method == "GET":
         try:
@@ -392,7 +404,8 @@ def fetch_single_highchart_data(request):
 
 
 # views.py
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_user(request, users_id):
     if request.method == 'POST':
         try:
@@ -412,7 +425,7 @@ def create_user(request, users_id):
             zip_code = data.get('zip_code')
             image_base64 = data.get('image')
 
-            if not all([firstname, lastname, email, contact, password, adress, zip_code]):
+            if not all([firstname, lastname, email, contact, password, ]):
                 return JsonResponse({'error': 'All required fields must be provided.'}, status=400)
 
             if role not in dict(User.ROLES):
@@ -470,51 +483,53 @@ def create_user(request, users_id):
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
 #for login user
-@csrf_exempt
-def login_user(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            email = data.get('email')
-            password = data.get('password')
+# @csrf_exempt
+# def login_user(request):
+#     if request.method == 'POST':
+#         try:
+#             data = json.loads(request.body)
+#             email = data.get('email')
+#             password = data.get('password')
             
-            try:
-                user = User.objects.get(email=email)
+#             try:
+#                 user = User.objects.get(email=email)
                 
-                if user.password == password:
-                    user.is_online = True
-                    user.save()
-                    refresh = RefreshToken.for_user(user)
-                    access_token = str(refresh.access_token)
-                    refresh_token = str(refresh)
+#                 if user.password == password:
+#                     user.is_online = True
+#                     user.save()
+#                     refresh = RefreshToken.for_user(user)
+#                     access_token = str(refresh.access_token)
+#                     refresh_token = str(refresh)
                     
-                    return JsonResponse({
-                        'success': True,
-                        'message': 'Login successful',
-                        'user_id': user.user_id,
-                        'firstname': user.firstname,
-                        'lastname': user.lastname,
-                        'role': user.role,
-                        'image': user.image,
-                        'unique_key' : str(user.unique_key),
-                        'access': access_token,
-                        'refresh': refresh_token,
-                        'is_online' : user.is_online
-                    }, status=200)
+#                     return JsonResponse({
+#                         'success': True,
+#                         'message': 'Login successful',
+#                         'user_id': user.user_id,
+#                         'firstname': user.firstname,
+#                         'lastname': user.lastname,
+#                         'role': user.role,
+#                         'image': user.image,
+#                         'unique_key' : str(user.unique_key),
+#                         'access': access_token,
+#                         'refresh': refresh_token,
+#                         'is_online' : user.is_online
+#                     }, status=200)
                     
-                else:
-                    return JsonResponse({'success': False, 'message': 'Invalid username or password'}, status=401)
+#                 else:
+#                     return JsonResponse({'success': False, 'message': 'Invalid username or password'}, status=401)
             
-            except User.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'User Not Found'}, status=404)
+#             except User.DoesNotExist:
+#                 return JsonResponse({'success': False, 'message': 'User Not Found'}, status=404)
         
-        except json.JSONDecodeError:
-            return JsonResponse({'success': False, 'message': 'Invalid data'}, status=400)
+#         except json.JSONDecodeError:
+#             return JsonResponse({'success': False, 'message': 'Invalid data'}, status=400)
     
-    return JsonResponse({'success': False, 'message': 'Invalid method'}, status=405)
+#     return JsonResponse({'success': False, 'message': 'Invalid method'}, status=405)
 
 
 #for login user
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 @csrf_exempt
 def login_user(request):
     if request.method == 'POST':
@@ -560,7 +575,8 @@ def login_user(request):
 
 
 #for logout*******
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def logout_user(request):
     if request.method=='POST':
         try:
@@ -585,7 +601,8 @@ def logout_user(request):
 
 
 #inserting project values to database
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_project(request):
     if request.method == 'POST':
         try:
@@ -638,7 +655,8 @@ def create_project(request):
     return JsonResponse({'error': 'Invalid method'}, status=405)
 
 
-
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def latest_project_data(request):
     if request.method == 'GET':
         user_id = request.GET.get('user_id')
@@ -708,7 +726,8 @@ def latest_project_data(request):
 
 
 #getting whole user data
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def get_user_data(request):
     if request.method == 'POST':
         try:
@@ -749,7 +768,8 @@ def get_user_data(request):
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
 #getting total number of users
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_uers(request):
     if request.method == 'GET':
         try:
@@ -764,7 +784,8 @@ def total_uers(request):
 #getting frequency and power factor
 logger = logging.getLogger(__name__)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_latest_project_data(request):
     if request.method == 'GET':
         user_id = request.GET.get('user_id')
@@ -801,7 +822,8 @@ def get_latest_project_data(request):
 
 
 #adding hardware to database
-@csrf_exempt  
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny]) 
 def add_hardware(request):
     if request.method == 'POST':
         try:
@@ -835,7 +857,8 @@ def add_hardware(request):
 
 
 #getting total number of hardware......
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def hardware_count(request , project_id):
     if request.method == 'GET':
         try:
@@ -849,7 +872,8 @@ def hardware_count(request , project_id):
             
 
 #getting connected hardware count
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def connected_hardware_count(request , project_id):
     if request.method == 'GET':
         try:
@@ -863,7 +887,8 @@ def connected_hardware_count(request , project_id):
         
 
 #user_project related table view
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def user_project(request):
     if request.method == 'POST':
         try:
@@ -892,7 +917,8 @@ def user_project(request):
     return JsonResponse({'Error' : 'Invvalid method'},status  = 400)
 
 #getting the whole user
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetching_users(request):
     user_id = request.GET.get('user_id')  # get user_id from query param
 
@@ -912,7 +938,8 @@ def fetching_users(request):
 
 
 #for deleting user
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def delete_user(request , user_id):
     if request.method == 'POST':
         try:
@@ -927,7 +954,8 @@ def delete_user(request , user_id):
             
 
 #for updating user
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def update_user(request, user_id):
     if request.method == 'POST':
         try:
@@ -966,7 +994,8 @@ def update_user(request, user_id):
 
 
 #for fetching hardware
-@csrf_exempt  
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_Hardware(request, user_id):
     if request.method == 'GET':
         try:
@@ -984,7 +1013,8 @@ def fetch_Hardware(request, user_id):
 
 
 #update hardware 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def update_hardware(request , hardware_id):
     if request.method == 'POST':
         try:
@@ -1002,7 +1032,8 @@ def update_hardware(request , hardware_id):
     else:
         return JsonResponse({'error' : 'invalid Http method'}, status=405)
     
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def delete_hardware(request , hardware_id):
     if request.method == 'POST':
         try:
@@ -1017,7 +1048,8 @@ def delete_hardware(request , hardware_id):
     
     
 #multiple user delete API
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def delete_selected_user(request):
     if request.method == 'POST':
         data = json.loads(request.body)
@@ -1029,7 +1061,8 @@ def delete_selected_user(request):
     return JsonResponse({'message' : 'invalid request methood'}, status=405)
 
 #multiple hardware delete API
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def delete_selected_hardware(request):
     if request.method == 'POST':
         data = json.loads(request.body)
@@ -1044,7 +1077,8 @@ def delete_selected_hardware(request):
 #create Project Manager
 from django.db import transaction
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def Create_Project_Manager(request):
     if request.method == 'POST':
         try:
@@ -1109,7 +1143,10 @@ def Create_Project_Manager(request):
             return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
     
     return JsonResponse({'error': 'Invalid request method. Only POST is allowed.'}, status=405)
-@csrf_exempt
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def Get_Project_Manager(request, user_id):     
     if request.method == 'GET':
         try:
@@ -1161,7 +1198,48 @@ def Get_Project_Manager(request, user_id):
     
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-@csrf_exempt
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def edit_project_manager(request, pm_id):
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+
+        # Fetch project manager by PM_id
+            try:
+                project_manager = Project_Manager.objects.get(PM_id=pm_id)
+            except Project_Manager.DoesNotExist:
+                return JsonResponse({'error': 'Project Manager not found'}, status=404)
+
+        # Update fields
+            project_manager.name = data.get('name', project_manager.name)
+            project_manager.longitude = data.get('longitude', project_manager.longitude)
+            project_manager.latitude = data.get('latitude', project_manager.latitude)
+            project_manager.address = data.get('address', project_manager.address)
+
+            project_manager.save()
+
+            return JsonResponse({
+                'message': 'Project Manager updated successfully',
+                'PM_id': project_manager.PM_id,
+                'name': project_manager.name,
+                'longitude': str(project_manager.longitude),
+                'latitude': str(project_manager.latitude),
+                'address': project_manager.address,
+            }, status=200)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'message': 'Invalid request method'}, status=405)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def Get_User_Project_Count(request, user_id):
     if request.method == 'GET':
         try:
@@ -1177,7 +1255,8 @@ def Get_User_Project_Count(request, user_id):
 
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def Get_All_Projects(request):
     if request.method == 'GET':
         try:
@@ -1236,7 +1315,8 @@ def Get_All_Projects(request):
 
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def Get_superAdmin_Project_Count(request):
     if request.method == 'GET':
         try:
@@ -1252,7 +1332,8 @@ def Get_superAdmin_Project_Count(request):
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 # create gateway by project manager
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_Gateways(request):
     if request.method == 'POST':
         try:
@@ -1299,7 +1380,8 @@ def create_Gateways(request):
 
 
 # count total gateways****************************
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_total_gateways(request):
     if request.method=="GET":
         try:
@@ -1315,7 +1397,8 @@ def get_total_gateways(request):
             },status=400)
 
 # count deployed gateways******************
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_deployed_gateways(request):
     if request.method=="GET":
         try:
@@ -1332,7 +1415,8 @@ def get_deployed_gateways(request):
             
             
 # count user aloted gateways
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_user_aloted_gateways(request):
     if request.method == 'GET':
         try:
@@ -1349,7 +1433,8 @@ def get_user_aloted_gateways(request):
 
 
 # fetch those gateway available in warehouse
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_unassigned_gateways(request):
     if request.method == "GET":
         try:
@@ -1388,7 +1473,8 @@ def get_unassigned_gateways(request):
 
 
 # APi to assign gateway to a user
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def assign_gateways_to_user(request):
     if request.method == "POST":
         try:
@@ -1420,7 +1506,10 @@ def assign_gateways_to_user(request):
             return JsonResponse({'error': str(e)}, status=400)
 
     return JsonResponse({'message': 'Invalid request method'}, status=405)
-@csrf_exempt
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_gateways_of_user(request):
     if request.method == "GET":
         try:
@@ -1471,7 +1560,8 @@ def fetch_gateways_of_user(request):
 
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-@csrf_exempt
+@api_view(['PUT'])
+@permission_classes([permissions.AllowAny])
 def update_gateway(request):
     if request.method == "PUT":
         try:
@@ -1506,7 +1596,8 @@ def update_gateway(request):
 
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_deployed_gateways_of_user(request):
     if request.method == "GET":
         try:
@@ -1552,7 +1643,8 @@ def fetch_deployed_gateways_of_user(request):
 
 
 # fetch user gateways in dropdown admin
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_gateways_of_usersList(request):
     if request.method == "GET":
         try:
@@ -1603,7 +1695,8 @@ def fetch_gateways_of_usersList(request):
 
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_deployed_gateway_count(request):
     if request.method == "GET":
         try:
@@ -1632,7 +1725,8 @@ def get_deployed_gateway_count(request):
 
 
 # getting total gateways
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_all_gateways(request):
     if request.method == "GET":
         try:
@@ -1690,7 +1784,8 @@ def analyzer_data(analyzer):
         "port": analyzer.port,
     }
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_analyzer(request):
     if request.method == 'POST':
         try:
@@ -1777,7 +1872,8 @@ def analyzer_data(analyzer):
         'gateway_id': analyzer.gateway.G_id,
     }
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_analyzers_by_gateway(request, gateway_id):
     try:
         # Retrieve the Gateway instance using the provided G_id
@@ -1823,7 +1919,8 @@ def get_analyzers_by_gateway(request, gateway_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_ports(request):
     if request.method == 'POST':
         try:
@@ -1863,7 +1960,8 @@ def create_ports(request):
     print(f"Invalid request method: {request.method}")
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_ports(request):
     if request.method == 'GET':
         try:
@@ -2010,7 +2108,8 @@ def fetch_analyzers_by_port(request, port_id):
         return JsonResponse({'error': str(e)}, status=500)
     
 #for specefic user
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def Fetch_Projects(request):
     if request.method == 'POST':
         try:
@@ -2048,7 +2147,8 @@ def Fetch_Projects(request):
     return JsonResponse({'error': 'Invalid request method'}, status=400)
 
 #fetch total projects
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_all_projects(request):
     if request.method == 'GET':
         try:
@@ -2075,7 +2175,8 @@ def fetch_all_projects(request):
 
 
 #for admin total hardware count
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_hardware_count(request):
     try:
         total_hardware = Hardware.objects.count()
@@ -2083,7 +2184,8 @@ def total_hardware_count(request):
     except Exception as e :
         return JsonResponse({'Error' : str(e)}, status=400)
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_connected_hardware(request):
     
         total_hardware = Hardware.objects.count()
@@ -2093,7 +2195,8 @@ def total_connected_hardware(request):
             'connected_Hardware' : connected_hardware
         })
         
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_project(request):
     try:
         total_project = Project_Manager.objects.count()
@@ -2101,7 +2204,8 @@ def total_project(request):
     except Exception as e:
         return JsonResponse({'error' : str(e)}, status=400)
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def active_project(request):
     total_project = Project_Manager.objects.count()
     active_project = Project_Manager.objects.filter(is_active=True).count()
@@ -2111,7 +2215,8 @@ def active_project(request):
         
     })
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetches_total_hardware(request):
     if request.method == 'GET':
         try:
@@ -2130,7 +2235,8 @@ def fetches_total_hardware(request):
 
 
 #fetch assigned Hardware
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_assigned_hardware(request):
     try:
         assigned_hardware = Hardware.objects.filter(user__isnull=False).values('hardware_id' , 'name' , 'user__firstname' , 'user__lastname')
@@ -2142,7 +2248,8 @@ def fetch_assigned_hardware(request):
     
 # -----Box model viewss---------
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_box(request):
     if request.method == "POST":
         try:
@@ -2172,7 +2279,8 @@ def create_box(request):
 
     return JsonResponse({"message": "Method not allowed"}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_boxes(request):
     try:
         
@@ -2194,7 +2302,8 @@ def get_boxes(request):
     
     
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_gateway(request):
     if request.method == 'POST':
         try:
@@ -2240,7 +2349,8 @@ def create_gateway(request):
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_gateway(request, gateway_name):
     try:
     
@@ -2291,7 +2401,8 @@ def fetch_gateway(request, gateway_name):
         return JsonResponse({"error": "Gateway not found"}, status=404)
     
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_all_gateways(request):
     try:
         # Retrieve all gateways from the database
@@ -2364,7 +2475,8 @@ def fetch_all_gateways(request):
 
     
 # value data for chart---------------------------------
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_value_data(request , gateway_name):
     
     try:
@@ -2394,7 +2506,8 @@ def fetch_value_data(request , gateway_name):
         return JsonResponse({'message' : 'Gateway not found'}, status=404)
     
 # specefic type data--------------------------------------last 20 values
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_device_data(request, gateway_name, device_type, device_subtype):
     try:
         
@@ -2439,7 +2552,8 @@ def fetch_device_data(request, gateway_name, device_type, device_subtype):
         return JsonResponse({"error": "Gateway not found"}, status=404)
 
 # fetching whole data
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_whole_device_data(request, gateway_name, device_type, device_subtype):
     try:
         
@@ -2484,7 +2598,8 @@ def fetch_whole_device_data(request, gateway_name, device_type, device_subtype):
         return JsonResponse({"error": "Gateway not found"}, status=404)
     
     
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def assign_gateway_to_project(request):
     """
     Assign a gateway to a project.
@@ -2549,7 +2664,8 @@ def get_gateways_for_project(request):
         return HttpResponse(status=405)  # Method Not Allowed
     
 # create Metadata **********************************************
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_metadata(request):
     if request.method == "POST":
         try:
@@ -2615,7 +2731,8 @@ def create_metadata(request):
 
 
 #  get metadata****************************************************************
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_metadata(request, analyzer_id):
     if request.method == "GET":
         try:
@@ -2651,7 +2768,8 @@ def get_metadata(request, analyzer_id):
     return JsonResponse({"message": "Invalid request method"}, status=405)
 
 # for getting the specefic value data and show in highchart****************************************************************
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_analyzer_value_data(request, analyzer_id, value_name):
     if request.method == 'GET':
         try:
@@ -2695,7 +2813,8 @@ def get_analyzer_value_data(request, analyzer_id, value_name):
         
 
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def post_metadata(request):
     if request.method == "POST":
         try:
@@ -2790,6 +2909,8 @@ def post_metadata(request):
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
 # Add debug logs
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_metadata(request):
     if request.method == "GET":
         try:
@@ -2834,7 +2955,8 @@ def fetch_metadata(request):
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_highchart_data(request):
     if request.method == "GET":
         try:
@@ -2916,7 +3038,8 @@ def fetch_highchart_data(request):
 
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def analyzer_values(request, gateway_name):
     if request.method == "GET":
         try:
@@ -2978,7 +3101,8 @@ def analyzer_values(request, gateway_name):
 
 
 # getting the gateway nmae and mac address for dropdown in project manager react jsx
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetch_deployed_gateways_name_mac(request):
     if request.method == "GET":
         try:
@@ -3018,7 +3142,8 @@ def fetch_deployed_gateways_name_mac(request):
     return JsonResponse({'message': 'Invalid request method'}, status=405)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_power_data(request):
     try:
         gateway_id = request.GET.get('gateway_id')  # 👈 now expecting gateway_id
@@ -3039,7 +3164,8 @@ def get_power_data(request):
         return JsonResponse({"error": str(e)}, status=500)
     
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_admin(request):
     if request.method == 'GET':
         try:
@@ -3050,7 +3176,8 @@ def total_admin(request):
             return JsonResponse({'error': str(e)}, status=500)
     return JsonResponse({'error': 'invalid method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def admin_detail(request):
     if request.method == 'GET':
         try:
@@ -3077,7 +3204,8 @@ def admin_detail(request):
 
     return JsonResponse({'error': 'Invalid method'}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_projecta(request):
     try:
         if request.method == 'GET':
@@ -3090,7 +3218,8 @@ def total_projecta(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def total_project_user(request):
     try:
         if request.method == 'GET':
@@ -3109,7 +3238,8 @@ def total_project_user(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def get_total_gateways_user(request):
     if request.method == "GET":
         try:
@@ -3135,7 +3265,8 @@ def get_total_gateways_user(request):
 
     return JsonResponse({"error": "Invalid method"}, status=405)
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def admin_detail_superadmin(request):
     if request.method == 'GET':
         try:
@@ -3162,7 +3293,8 @@ def admin_detail_superadmin(request):
     return JsonResponse({'error': 'Invalid method'}, status=405)
 
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def create_admin(request):
     if request.method == 'POST':
         try:
@@ -3238,7 +3370,8 @@ def create_admin(request):
     return JsonResponse({'error': 'Invalid HTTP method.'}, status=405)
 
 
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def fetching_user(request):
     user_id = request.GET.get('user_id')
 

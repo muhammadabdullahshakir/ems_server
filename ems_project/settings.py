@@ -115,13 +115,63 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+
+#for localhost
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'mydjango',          
+#         'USER': 'djangouser',         
+#         'PASSWORD': 'mypassword123',  
+#         'HOST': 'localhost',
+#         'PORT': '3306',
+#     }
+# }
+
+#for cloud
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'emsdb1',          
+        'USER': 'misbah',            
+        'PASSWORD': '?5@1D9:lA_ex6p(%',     
+        'HOST': '34.60.166.10',               
+        'PORT': '3306',
     }
 }
 
+
+
+
+
+# for cloud
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'emsdb1',          
+#         'USER': 'root',            
+#         'PASSWORD': ';.sEYlc3Re-JU>ex',     
+#         'HOST': '34.60.166.10',               
+#         'PORT': '3306',
+#         'OPTIONS': {
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#             'charset': 'utf8mb4',
+#             # Uncomment below if using SSL (recommended)
+#             # 'ssl': {
+#             #     'ca': os.path.join(BASE_DIR, 'server-ca.pem'),
+#             #     'cert': os.path.join(BASE_DIR, 'client-cert.pem'),
+#             #     'key': os.path.join(BASE_DIR, 'client-key.pem')
+#             # }
+#         }
+#     }
+# }
+
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
