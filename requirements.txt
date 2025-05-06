@@ -13,4 +13,6 @@ python-dotenv
 pymysql
 mysqlclient
 django-environ
-google
+google-cloud-secret-manager
+django-storages
+google-auth
