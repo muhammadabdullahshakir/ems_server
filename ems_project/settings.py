@@ -12,47 +12,12 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
-import io 
 from datetime import timedelta
-import environ
 from urllib.parse import urlparse
-import google.auth
-from google.cloud import secretmanager
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-# SECURITY WARNING: don't run with debug turned on in production!
-# Change this to "False" when you are ready for production
-env = environ.Env(DEBUG=(bool, True))
-env_file = os.path.join(BASE_DIR, ".env")
-
-# Attempt to load the Project ID into the environment, safely failing on error.
-try:
-    _, os.environ["GOOGLE_CLOUD_PROJECT"] = google.auth.default()
-except google.auth.exceptions.DefaultCredentialsError:
-    pass
-
-if os.path.isfile(env_file):
-    # Use a local secret file, if provided
-
-    env.read_env(env_file)
-# ...
-elif os.environ.get("GOOGLE_CLOUD_PROJECT", None):
-    # Pull secrets from Secret Manager
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-
-    client = secretmanager.SecretManagerServiceClient()
-    settings_name = os.environ.get("SETTINGS_NAME", "django_settings")
-    name = f"projects/{project_id}/secrets/{settings_name}/versions/latest"
-    payload = client.access_secret_version(name=name).payload.data.decode("UTF-8")
-
-    env.read_env(io.StringIO(payload))
-else:
-    raise Exception("No local .env or GOOGLE_CLOUD_PROJECT detected. No secrets found.")
-
-
 
 
 # Quick-start development settings - unsuitable for production
@@ -64,22 +29,9 @@ SECRET_KEY = "django-insecure-h8pki%_7ld!zf^^ro&y+a3)9f&6=v60-qdo%(o^+u1e6#1hitc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# SECURITY WARNING: It's recommended that you use this when
-# running in production. The URLs will be known once you first deploy
-# to Cloud Run. This code takes the URLs and converts it to both these settings formats.
-CLOUDRUN_SERVICE_URLS = env("CLOUDRUN_SERVICE_URLS", default=None)
-if CLOUDRUN_SERVICE_URLS:
-    CSRF_TRUSTED_ORIGINS = env("CLOUDRUN_SERVICE_URLS").split(",")
-    # Remove the scheme from URLs for ALLOWED_HOSTS
-    ALLOWED_HOSTS = [urlparse(url).netloc for url in CSRF_TRUSTED_ORIGINS]
-
-    SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-else:
-    ALLOWED_HOSTS = ["*"]
-    #ALLOWED_HOSTS = ['ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
-    #CSRF_TRUSTED_ORIGINS = ['https://ems-webapp-530056698.us-central1.run.app']
-    #https://ems-webapp-530056698.us-central1.run.app/
+ALLOWED_HOSTS = ['ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
+CSRF_TRUSTED_ORIGINS = ['https://ems-webapp-530056698.us-central1.run.app']
+#https://ems-webapp-530056698.us-central1.run.app/
 
 
 # Application definition
@@ -171,29 +123,16 @@ DB_USER = "misbah"
 DB_PASS = "?5@1D9:lA_ex6p(%"
 DB_NAME = "emsdb"
 
-if os.environ.get('K_REVISION', None):
-    DATABASES = {
+DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': DB_NAME,
         'USER': DB_USER,
         'PASSWORD': DB_PASS,
-        'HOST': f'/cloudsql/{INSTANCE_CONNECTION_NAME}',  # This tells Django to connect via UNIX socket
-        }
-    }
-else:
-    DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': DB_NAME,
-        'USER': DB_USER,
-        'PASSWORD': DB_PASS,
-        'HOST': '127.0.0.1',#f'/cloudsql/{INSTANCE_CONNECTION_NAME}',  # This tells Django to connect via UNIX socket
+        'HOST': '10.128.0.32',#f'/cloudsql/{INSTANCE_CONNECTION_NAME}',  # This tells Django to connect via UNIX socket
         'PORT': '3306',
-        }
     }
-    pass
-
+}
 
 
 # Password validation
