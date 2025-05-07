@@ -121,7 +121,7 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 INSTANCE_CONNECTION_NAME = "myprojectems-435411:us-central1:emsdb"  # Format: project:region:instance
 DB_USER = "misbah"
 DB_PASS = "?5@1D9:lA_ex6p(%"
-DB_NAME = "emsdb"
+DB_NAME = "emsdb1"
 
 DATABASES = {
     'default': {
