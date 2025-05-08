@@ -13,8 +13,6 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
-from urllib.parse import urlparse
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -117,6 +115,8 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+
+#for localhost
 # Get environment variables (these should be set in Cloud Run)
 INSTANCE_CONNECTION_NAME = "myprojectems-435411:us-central1:emsdb"  # Format: project:region:instance
 DB_USER = "misbah"
@@ -134,6 +134,50 @@ DATABASES = {
     }
 }
 
+#for cloud
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'emsdb1',          
+#         'USER': 'misbah',            
+#         'PASSWORD': '?5@1D9:lA_ex6p(%',     
+#         'HOST': '34.60.166.10',               
+#         'PORT': '3306',
+#     }
+# }
+
+
+
+
+
+# for cloud
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'emsdb1',          
+#         'USER': 'root',            
+#         'PASSWORD': ';.sEYlc3Re-JU>ex',     
+#         'HOST': '34.60.166.10',               
+#         'PORT': '3306',
+#         'OPTIONS': {
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#             'charset': 'utf8mb4',
+#             # Uncomment below if using SSL (recommended)
+#             # 'ssl': {
+#             #     'ca': os.path.join(BASE_DIR, 'server-ca.pem'),
+#             #     'cert': os.path.join(BASE_DIR, 'client-cert.pem'),
+#             #     'key': os.path.join(BASE_DIR, 'client-key.pem')
+#             # }
+#         }
+#     }
+# }
+
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

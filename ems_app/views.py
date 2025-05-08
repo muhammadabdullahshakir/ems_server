@@ -149,6 +149,7 @@ def create_superadmincr(request):
 
     return JsonResponse({'error': 'Invalid HTTP method. Use POST.'}, status=405)
 
+
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
 def invoice_api(request):
@@ -218,6 +219,7 @@ def invoice_api(request):
 
     else:
         return JsonResponse({'error': 'Unsupported HTTP method'}, status=405)
+
 
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
@@ -2932,6 +2934,7 @@ def fetch_metadata(request):
                             "name": getattr(metadata, f"value{i}_name", None),
                             "address": getattr(metadata, f"value{i}_address", None),
                             "value": getattr(metadata, f"value{i}_value", None),
+                            "unit": getattr(metadata, f"value{i}_unit", None), 
                         }
                         for i in range(1, 21)
                         if getattr(metadata, f"value{i}_name", None)
@@ -3023,6 +3026,7 @@ def fetch_highchart_data(request):
                             "data": value_series,
                             "unit": unit
                         })
+                
                 # **Sort the analyzers inside port_data["data"] by their earliest timestamp**
                 port_data["data"].sort(key=lambda x: x["data"][0][0] if x["data"] else float("inf"))
                 if port_data["data"]:

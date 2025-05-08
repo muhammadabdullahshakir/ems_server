@@ -1,8 +1,7 @@
 from django.db import models
 from django.utils import timezone
 import uuid
-import threading
-from datetime import timedelta  
+
 
 # models.py
 class User(models.Model):
