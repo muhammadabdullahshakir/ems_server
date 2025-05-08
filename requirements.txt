@@ -10,3 +10,9 @@ psycopg2-binary
 gunicorn
 requests
 python-dotenv
+pymysql
+mysqlclient
+django-environ
+google-cloud-secret-manager
+django-storages
+google-auth

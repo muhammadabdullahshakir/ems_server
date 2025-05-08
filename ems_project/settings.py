@@ -27,7 +27,7 @@ SECRET_KEY = "django-insecure-h8pki%_7ld!zf^^ro&y+a3)9f&6=v60-qdo%(o^+u1e6#1hitc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
+ALLOWED_HOSTS = ['*','ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
 CSRF_TRUSTED_ORIGINS = ['https://ems-webapp-530056698.us-central1.run.app']
 #https://ems-webapp-530056698.us-central1.run.app/
 
@@ -117,28 +117,29 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 
 
 #for localhost
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'mydjango',          
+        'USER': 'djangouser',         
+        'PASSWORD': 'mypassword123',  
+        'HOST': 'localhost',
+        'PORT': '3306',
+    }
+}
+
+#for cloud
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'mydjango',          
-#         'USER': 'djangouser',         
-#         'PASSWORD': 'mypassword123',  
-#         'HOST': 'localhost',
+#         'NAME': 'emsdb1',          
+#         'USER': 'misbah',            
+#         'PASSWORD': '?5@1D9:lA_ex6p(%',     
+#         'HOST': '34.60.166.10',               
 #         'PORT': '3306',
 #     }
 # }
 
-#for cloud
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'emsdb1',          
-        'USER': 'misbah',            
-        'PASSWORD': '?5@1D9:lA_ex6p(%',     
-        'HOST': '34.60.166.10',               
-        'PORT': '3306',
-    }
-}
 
 
 
