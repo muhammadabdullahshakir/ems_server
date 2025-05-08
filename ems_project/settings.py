@@ -117,29 +117,28 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 
 
 #for localhost
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'mydjango',          
-        'USER': 'djangouser',         
-        'PASSWORD': 'mypassword123',  
-        'HOST': 'localhost',
-        'PORT': '3306',
-    }
-}
-
-#for cloud
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'emsdb1',          
-#         'USER': 'misbah',            
-#         'PASSWORD': '?5@1D9:lA_ex6p(%',     
-#         'HOST': '34.60.166.10',               
+#         'NAME': 'mydjango',          
+#         'USER': 'djangouser',         
+#         'PASSWORD': 'mypassword123',  
+#         'HOST': 'localhost',
 #         'PORT': '3306',
 #     }
 # }
 
+#for cloud
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'emsdb1',          
+        'USER': 'misbah',            
+        'PASSWORD': '?5@1D9:lA_ex6p(%',     
+        'HOST': '34.60.166.10',               
+        'PORT': '3306',
+    }
+}
 
 
 
