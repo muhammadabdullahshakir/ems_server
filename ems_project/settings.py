@@ -27,7 +27,7 @@ SECRET_KEY = "django-insecure-h8pki%_7ld!zf^^ro&y+a3)9f&6=v60-qdo%(o^+u1e6#1hitc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*','ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
+ALLOWED_HOSTS = ['ems-server-530056698.us-central1.run.app', 'ems-webapp-530056698.us-central1.run.app']
 CSRF_TRUSTED_ORIGINS = ['https://ems-webapp-530056698.us-central1.run.app']
 #https://ems-webapp-530056698.us-central1.run.app/
 
@@ -117,13 +117,19 @@ WSGI_APPLICATION = "ems_project.wsgi.application"
 
 
 #for localhost
+# Get environment variables (these should be set in Cloud Run)
+INSTANCE_CONNECTION_NAME = "myprojectems-435411:us-central1:emsdb"  # Format: project:region:instance
+DB_USER = "misbah"
+DB_PASS = "?5@1D9:lA_ex6p(%"
+DB_NAME = "emsdb1"
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'mydjango',          
-        'USER': 'djangouser',         
-        'PASSWORD': 'mypassword123',  
-        'HOST': 'localhost',
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASS,
+        'HOST': f'/cloudsql/{INSTANCE_CONNECTION_NAME}',  # This tells Django to connect via UNIX socket
         'PORT': '3306',
     }
 }
